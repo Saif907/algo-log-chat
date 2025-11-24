@@ -1,10 +1,11 @@
 import { Search, Settings, Image, Globe, Calendar, Send } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { ChatInput } from "@/components/ChatInput";
 
 export const AIChat = () => {
   return (
-    <div className="min-h-screen flex flex-col items-center justify-center p-6">
+    <div className="min-h-screen pb-24 flex flex-col items-center justify-center p-6">
       <div className="w-full max-w-3xl space-y-8">
         {/* Logo and Title */}
         <div className="text-center space-y-4">
@@ -18,34 +19,6 @@ export const AIChat = () => {
           <div>
             <h1 className="text-5xl font-bold mb-2">TradeLM</h1>
             <p className="text-xl text-muted-foreground">AI-Powered Trading Intelligence</p>
-          </div>
-        </div>
-
-        {/* Search Input */}
-        <div className="relative">
-          <div className="relative flex items-center">
-            <Search className="absolute left-4 h-5 w-5 text-muted-foreground" />
-            <Input
-              placeholder="Ask anything about trading, analyze your portfolio, or log a trade..."
-              className="pl-12 pr-36 py-6 text-base rounded-2xl border-2 focus-visible:ring-primary"
-            />
-            <div className="absolute right-3 flex items-center gap-2">
-              <Button variant="ghost" size="icon" className="h-8 w-8 rounded-lg">
-                <Settings className="h-4 w-4" />
-              </Button>
-              <Button variant="ghost" size="icon" className="h-8 w-8 rounded-lg">
-                <Image className="h-4 w-4" />
-              </Button>
-              <Button variant="ghost" size="icon" className="h-8 w-8 rounded-lg">
-                <Globe className="h-4 w-4" />
-              </Button>
-              <Button variant="ghost" size="icon" className="h-8 w-8 rounded-lg">
-                <Calendar className="h-4 w-4" />
-              </Button>
-              <Button size="icon" className="h-8 w-8 rounded-lg">
-                <Send className="h-4 w-4" />
-              </Button>
-            </div>
           </div>
         </div>
 
@@ -69,6 +42,8 @@ export const AIChat = () => {
           </Button>
         </div>
       </div>
+      
+      <ChatInput placeholder="Ask anything about trading, analyze your portfolio, or log a trade..." />
     </div>
   );
 };

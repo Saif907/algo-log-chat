@@ -7,6 +7,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
 import { Download, Plus, Filter, Search, Copy, Heart, Calendar, Clock } from "lucide-react";
+import { ChatInput } from "@/components/ChatInput";
 
 const mockTrades = [
   {
@@ -63,8 +64,9 @@ export const Trades = () => {
   const [activeTab, setActiveTab] = useState("all");
 
   return (
-    <div className="min-h-screen p-6">
-      <div className="max-w-[1600px] mx-auto">
+    <div className="min-h-screen pb-24">
+      <div className="p-6">
+        <div className="max-w-[1600px] mx-auto">
         <div className="flex justify-between items-center mb-6">
           <div>
             <h1 className="text-3xl font-bold mb-2">Trades</h1>
@@ -275,7 +277,14 @@ export const Trades = () => {
             </TableBody>
           </Table>
         </Card>
+        </div>
       </div>
+      
+      <ChatInput 
+        placeholder="Ask about your trades or trade details..." 
+        showPagination 
+        showCount="Showing 4 trades"
+      />
     </div>
   );
 };

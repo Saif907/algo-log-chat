@@ -7,6 +7,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
 import { Plus, Lock, MoreVertical, Trash2 } from "lucide-react";
+import { ChatInput } from "@/components/ChatInput";
 
 const mockPlaybooks = [
   {
@@ -99,8 +100,9 @@ export const Playbooks = () => {
   ]);
 
   return (
-    <div className="min-h-screen p-6">
-      <div className="max-w-7xl mx-auto">
+    <div className="min-h-screen pb-24">
+      <div className="p-6">
+        <div className="max-w-7xl mx-auto">
         <div className="flex justify-between items-center mb-6">
           <div>
             <h1 className="text-3xl font-bold mb-2">Playbooks</h1>
@@ -282,19 +284,10 @@ export const Playbooks = () => {
             </Card>
           ))}
         </div>
-
-        <div className="fixed bottom-6 right-6 left-auto">
-          <div className="bg-card border border-border rounded-lg p-4 shadow-lg max-w-md">
-            <Input 
-              placeholder="Ask about your playbooks or create a new one..." 
-              className="border-border"
-            />
-            <Button size="sm" className="mt-2 ml-auto bg-[#00d4ff] hover:bg-[#00b8e0] text-black">
-              <Plus className="h-4 w-4" />
-            </Button>
-          </div>
         </div>
       </div>
+      
+      <ChatInput placeholder="Ask about your playbooks or trading strategies..." />
     </div>
   );
 };
