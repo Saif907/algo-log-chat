@@ -4,6 +4,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { AreaChart, Area, BarChart, Bar, RadarChart, PolarGrid, PolarAngleAxis, Radar, ResponsiveContainer, XAxis, YAxis, CartesianGrid, Tooltip } from "recharts";
+import { ChatInput } from "@/components/ChatInput";
 
 const radarData = [
   { subject: 'Win Rate', value: 75 },
@@ -26,7 +27,8 @@ const dailyData = [
 
 export const Dashboard = () => {
   return (
-    <div className="min-h-screen p-6 space-y-6">
+    <div className="min-h-screen pb-24">
+      <div className="p-6 space-y-6">
       {/* Filters Bar */}
       <div className="flex items-center gap-4 flex-wrap">
         <Button variant="outline" size="sm" className="gap-2">
@@ -247,6 +249,9 @@ export const Dashboard = () => {
           </CardContent>
         </Card>
       </div>
+      </div>
+      
+      <ChatInput placeholder="Ask about your trading performance..." />
     </div>
   );
 };
