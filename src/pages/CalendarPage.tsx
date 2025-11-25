@@ -62,9 +62,10 @@ export const CalendarPage = () => {
   };
 
   const getCellStyle = (day: number | null) => {
-    if (!day || !mockTradeData[day as keyof typeof mockTradeData]) return "";
-    
+    if (!day) return "";
     const data = mockTradeData[day as keyof typeof mockTradeData];
+    if (!data) return "";
+    
     if (data.pnl > 0) return "bg-success/20 border-success/30";
     if (data.pnl < 0) return "bg-destructive/20 border-destructive/30";
     return "";
@@ -162,11 +163,12 @@ export const CalendarPage = () => {
                           variant="secondary"
                           className="h-5 w-5 p-0 flex items-center justify-center rounded-full text-xs"
                         >
-                          {mockTradeData[day as keyof typeof mockTradeData].trades}
+                          {mockTradeData[day as keyof typeof mockTradeData]?.trades}
                         </Badge>
                       )}
                     </div>
-                    {mockTradeData[day as keyof typeof mockTradeData]?.pnl !== 0 && (
+                    {mockTradeData[day as keyof typeof mockTradeData] && 
+                     mockTradeData[day as keyof typeof mockTradeData].pnl !== 0 && (
                       <div
                         className={`text-sm font-semibold ${
                           mockTradeData[day as keyof typeof mockTradeData].pnl > 0
