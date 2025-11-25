@@ -1,12 +1,8 @@
-import { Home, TrendingUp, Layers, BookOpen, Calendar, BarChart3, MessageSquare, ChevronLeft, ChevronRight } from "lucide-react";
+import { Home, TrendingUp, Layers, BookOpen, Calendar, BarChart3, MessageSquare, ChevronLeft, ChevronRight, X } from "lucide-react";
 import { NavLink } from "./NavLink";
 import { cn } from "@/lib/utils";
 import { Button } from "./ui/button";
-
-interface SidebarProps {
-  collapsed: boolean;
-  onToggle: () => void;
-}
+import { useSidebar } from "@/contexts/SidebarContext";
 
 const mainNav = [
   { title: "Home", icon: Home, url: "/" },
@@ -21,12 +17,16 @@ const toolsNav = [
   { title: "AI Chat", icon: MessageSquare, url: "/ai-chat" },
 ];
 
-export const Sidebar = ({ collapsed, onToggle }: SidebarProps) => {
+export const Sidebar = () => {
+  const { collapsed, setCollapsed, isMobile, mobileOpen, setMobileOpen } = useSidebar();
+
   return (
     <aside
       className={cn(
         "fixed left-0 top-0 z-40 h-screen bg-card border-r border-border transition-all duration-300 ease-in-out flex flex-col",
-        collapsed ? "w-16" : "w-60"
+        collapsed ? "w-16" : "w-60",
+        isMobile && !mobileOpen && "-translate-x-full",
+        isMobile && "z-50"
       )}
     >
       {/* Header */}
@@ -39,14 +39,25 @@ export const Sidebar = ({ collapsed, onToggle }: SidebarProps) => {
             <span className="font-semibold text-lg">TradeLM</span>
           </div>
         )}
-        <Button
-          variant="ghost"
-          size="icon"
-          onClick={onToggle}
-          className={cn("h-8 w-8", collapsed && "mx-auto")}
-        >
-          {collapsed ? <ChevronRight className="h-4 w-4" /> : <ChevronLeft className="h-4 w-4" />}
-        </Button>
+        {isMobile ? (
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={() => setMobileOpen(false)}
+            className="h-8 w-8"
+          >
+            <X className="h-4 w-4" />
+          </Button>
+        ) : (
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={() => setCollapsed(!collapsed)}
+            className={cn("h-8 w-8", collapsed && "mx-auto")}
+          >
+            {collapsed ? <ChevronRight className="h-4 w-4" /> : <ChevronLeft className="h-4 w-4" />}
+          </Button>
+        )}
       </div>
 
       {/* Navigation */}
