@@ -36,7 +36,7 @@ const topInstruments = [
 
 export const Dashboard = () => {
   return (
-    <div className="min-h-screen p-6 space-y-6">
+    <div className="min-h-screen p-6 space-y-6 px-4 md:px-6 lg:px-8">
       {/* Stats Cards */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
         <Card className="p-6">

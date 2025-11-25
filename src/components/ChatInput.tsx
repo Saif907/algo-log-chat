@@ -1,6 +1,8 @@
 import { Sparkles, Send } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { useSidebar } from "@/contexts/SidebarContext";
+import { cn } from "@/lib/utils";
 
 interface ChatInputProps {
   placeholder?: string;
@@ -8,6 +10,9 @@ interface ChatInputProps {
   onPrevious?: () => void;
   onNext?: () => void;
   showCount?: string;
+  onSend?: () => void;
+  value?: string;
+  onChange?: (value: string) => void;
 }
 
 export const ChatInput = ({ 
@@ -15,10 +20,21 @@ export const ChatInput = ({
   showPagination = false,
   onPrevious,
   onNext,
-  showCount
+  showCount,
+  onSend,
+  value,
+  onChange
 }: ChatInputProps) => {
+  const { collapsed, isMobile } = useSidebar();
+  
   return (
-    <div className="fixed bottom-6 left-0 right-0 z-50 pointer-events-none">
+    <div 
+      className={cn(
+        "fixed bottom-6 right-0 z-50 pointer-events-none transition-all duration-300",
+        !isMobile && (collapsed ? "left-16" : "left-60"),
+        isMobile && "left-0"
+      )}
+    >
       <div className="max-w-4xl mx-auto px-6 w-[90%] md:w-[65%]">
         <div className="pointer-events-auto">
           <div className="flex items-center gap-3 bg-background/80 backdrop-blur-xl rounded-full border border-border px-5 py-3 shadow-2xl">
@@ -31,6 +47,9 @@ export const ChatInput = ({
             <Sparkles className="h-5 w-5 text-muted-foreground flex-shrink-0" />
             <Input
               placeholder={placeholder}
+              value={value}
+              onChange={(e) => onChange?.(e.target.value)}
+              onKeyDown={(e) => e.key === "Enter" && onSend?.()}
               className="border-0 bg-transparent focus-visible:ring-0 focus-visible:ring-offset-0 px-0 h-auto py-0 flex-1"
             />
             
@@ -53,6 +72,7 @@ export const ChatInput = ({
               <Button 
                 size="icon" 
                 className="h-9 w-9 rounded-full flex-shrink-0"
+                onClick={onSend}
               >
                 <Send className="h-4 w-4" />
               </Button>

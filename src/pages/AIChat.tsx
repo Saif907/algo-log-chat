@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Search, Sparkles, Image, Globe, Calendar, Send, TrendingUp, BarChart, Shield } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { ChatInput } from "@/components/ChatInput";
 
 const quickActions = [
   { icon: TrendingUp, label: "Log a trade" },
@@ -167,34 +168,13 @@ export const AIChat = () => {
             </div>
           </div>
 
-          {/* Floating Input */}
-          <div className="fixed bottom-6 left-0 right-0 z-50 pointer-events-none">
-            <div className="max-w-4xl mx-auto px-6 w-[90%] md:w-[65%]">
-              <div className="pointer-events-auto">
-                <div className="flex items-center gap-3 bg-background/80 backdrop-blur-xl rounded-full border border-border px-5 py-3 shadow-2xl">
-                  <Sparkles className="h-5 w-5 text-muted-foreground flex-shrink-0" />
-                  <Input
-                    value={input}
-                    onChange={(e) => setInput(e.target.value)}
-                    onKeyDown={(e) => e.key === "Enter" && handleSend()}
-                    placeholder="Ask anything..."
-                    className="border-0 bg-transparent focus-visible:ring-0 focus-visible:ring-offset-0 px-0 h-auto py-0 flex-1"
-                  />
-                  <Button 
-                    size="icon" 
-                    className="h-9 w-9 rounded-full flex-shrink-0"
-                    onClick={handleSend}
-                  >
-                    <Send className="h-4 w-4" />
-                  </Button>
-                </div>
-                
-                <p className="text-xs text-muted-foreground/60 text-center mt-2">
-                  AI can make mistakes. Check important info.
-                </p>
-              </div>
-            </div>
-          </div>
+          {/* Floating Input - Now uses ChatInput component */}
+          <ChatInput 
+            placeholder="Ask anything..."
+            onSend={handleSend}
+            value={input}
+            onChange={setInput}
+          />
         </div>
       )}
     </div>

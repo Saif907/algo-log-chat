@@ -76,7 +76,7 @@ export const CalendarPage = () => {
   };
 
   return (
-    <div className="min-h-screen pb-24">
+    <div className="min-h-screen pb-24 px-4 md:px-6 lg:px-8">
       <div className="p-8">
         {/* Header */}
         <div className="mb-8">

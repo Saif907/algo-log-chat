@@ -64,7 +64,7 @@ export const Trades = () => {
   const [activeTab, setActiveTab] = useState("all");
 
   return (
-    <div className="min-h-screen pb-24">
+    <div className="min-h-screen pb-24 px-4 md:px-6 lg:px-8">
       <div className="p-6">
         <div className="max-w-[1600px] mx-auto">
         <div className="flex justify-between items-center mb-6">
