@@ -14,7 +14,7 @@ export const Layout = ({ children }: LayoutProps) => {
       <Sidebar collapsed={collapsed} onToggle={() => setCollapsed(!collapsed)} />
       <main 
         className={cn(
-          "flex-1 transition-all duration-300 ease-in-out",
+          "flex-1 transition-all duration-300 ease-in-out pb-32",
           collapsed ? "ml-16" : "ml-60"
         )}
       >

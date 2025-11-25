@@ -8,7 +8,7 @@ import { Dashboard } from "./pages/Dashboard";
 import { AIChat } from "./pages/AIChat";
 import { Markets } from "./pages/Markets";
 import { Trades } from "./pages/Trades";
-import { Playbooks } from "./pages/Playbooks";
+import { Strategies } from "./pages/Strategies";
 import { CalendarPage } from "./pages/CalendarPage";
 import { Analytics } from "./pages/Analytics";
 import NotFound from "./pages/NotFound";
@@ -26,7 +26,7 @@ const App = () => (
             <Route path="/" element={<Dashboard />} />
             <Route path="/markets" element={<Markets />} />
             <Route path="/trades" element={<Trades />} />
-            <Route path="/playbooks" element={<Playbooks />} />
+            <Route path="/strategies" element={<Strategies />} />
             <Route path="/calendar" element={<CalendarPage />} />
             <Route path="/analytics" element={<Analytics />} />
             <Route path="/ai-chat" element={<AIChat />} />

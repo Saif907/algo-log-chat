@@ -12,7 +12,7 @@ const mainNav = [
   { title: "Home", icon: Home, url: "/" },
   { title: "Markets", icon: TrendingUp, url: "/markets" },
   { title: "Trades", icon: Layers, url: "/trades" },
-  { title: "Playbooks", icon: BookOpen, url: "/playbooks" },
+  { title: "Strategies", icon: BookOpen, url: "/strategies" },
 ];
 
 const toolsNav = [
