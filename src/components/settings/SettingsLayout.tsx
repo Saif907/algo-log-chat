@@ -5,7 +5,7 @@ import {
   CreditCard, Shield, Palette, Key, HelpCircle, Bot
 } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { useSidebar } from "@/contexts/SidebarContext";
+import { SidebarProvider, useSidebar } from "@/contexts/SidebarContext";
 
 interface SettingsLayoutProps {
   children: ReactNode;
@@ -41,7 +41,7 @@ const settingsSections = [
   },
 ];
 
-export const SettingsLayout = ({ children }: SettingsLayoutProps) => {
+const SettingsLayoutContent = ({ children }: SettingsLayoutProps) => {
   const { collapsed, isMobile } = useSidebar();
 
   return (
@@ -93,5 +93,13 @@ export const SettingsLayout = ({ children }: SettingsLayoutProps) => {
         </main>
       </div>
     </div>
+  );
+};
+
+export const SettingsLayout = ({ children }: SettingsLayoutProps) => {
+  return (
+    <SidebarProvider>
+      <SettingsLayoutContent>{children}</SettingsLayoutContent>
+    </SidebarProvider>
   );
 };
