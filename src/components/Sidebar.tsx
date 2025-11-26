@@ -3,6 +3,7 @@ import { NavLink } from "./NavLink";
 import { cn } from "@/lib/utils";
 import { Button } from "./ui/button";
 import { useSidebar } from "@/contexts/SidebarContext";
+import { UserProfileDropdown } from "./UserProfileDropdown";
 
 const mainNav = [
   { title: "Home", icon: Home, url: "/" },
@@ -117,17 +118,7 @@ export const Sidebar = () => {
 
       {/* User Section */}
       <div className="border-t border-border p-4">
-        <div className={cn("flex items-center gap-3", collapsed && "justify-center")}>
-          <div className="h-8 w-8 rounded-full bg-primary flex items-center justify-center flex-shrink-0">
-            <span className="text-xs font-semibold text-primary-foreground">U</span>
-          </div>
-          {!collapsed && (
-            <div className="flex-1 min-w-0">
-              <p className="text-sm font-medium truncate">Trader</p>
-              <p className="text-xs text-muted-foreground truncate">Pro Plan</p>
-            </div>
-          )}
-        </div>
+        <UserProfileDropdown collapsed={collapsed} />
       </div>
     </aside>
   );
