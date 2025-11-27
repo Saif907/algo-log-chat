@@ -5,6 +5,9 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { Layout } from "./components/Layout";
 import { ThemeProvider } from "./components/ThemeProvider";
+import { AuthProvider } from "./contexts/AuthContext";
+import { ProtectedRoute } from "./components/ProtectedRoute";
+import { Auth } from "./pages/Auth";
 import { Dashboard } from "./pages/Dashboard";
 import { AIChat } from "./pages/AIChat";
 import { Markets } from "./pages/Markets";
@@ -34,37 +37,42 @@ const App = () => (
   <QueryClientProvider client={queryClient}>
     <ThemeProvider attribute="class" defaultTheme="system" enableSystem>
       <TooltipProvider>
-        <Toaster />
-        <Sonner />
-        <BrowserRouter>
-          <Routes>
-            {/* Main App Routes */}
-            <Route path="/" element={<Layout><Dashboard /></Layout>} />
-            <Route path="/markets" element={<Layout><Markets /></Layout>} />
-            <Route path="/trades" element={<Layout><Trades /></Layout>} />
-            <Route path="/strategies" element={<Layout><Strategies /></Layout>} />
-            <Route path="/calendar" element={<Layout><CalendarPage /></Layout>} />
-            <Route path="/analytics" element={<Layout><Analytics /></Layout>} />
-            <Route path="/ai-chat" element={<Layout><AIChat /></Layout>} />
-            
-            {/* Settings Routes (No Layout wrapper - SettingsLayout handles it) */}
-            <Route path="/settings" element={<Profile />} />
-            <Route path="/settings/profile" element={<Profile />} />
-            <Route path="/settings/accounts" element={<AccountsBrokers />} />
-            <Route path="/settings/trading" element={<TradingPreferences />} />
-            <Route path="/settings/journal" element={<JournalSettings />} />
-            <Route path="/settings/ai" element={<AISettings />} />
-            <Route path="/settings/notifications" element={<Notifications />} />
-            <Route path="/settings/data" element={<DataImport />} />
-            <Route path="/settings/billing" element={<Billing />} />
-            <Route path="/settings/security" element={<Security />} />
-            <Route path="/settings/appearance" element={<Appearance />} />
-            <Route path="/settings/api-keys" element={<APIKeys />} />
-            <Route path="/settings/about" element={<About />} />
-            
-            <Route path="*" element={<NotFound />} />
-          </Routes>
-        </BrowserRouter>
+        <AuthProvider>
+          <Toaster />
+          <Sonner />
+          <BrowserRouter>
+            <Routes>
+              {/* Public Route */}
+              <Route path="/auth" element={<Auth />} />
+              
+              {/* Protected Main App Routes */}
+              <Route path="/" element={<ProtectedRoute><Layout><Dashboard /></Layout></ProtectedRoute>} />
+              <Route path="/markets" element={<ProtectedRoute><Layout><Markets /></Layout></ProtectedRoute>} />
+              <Route path="/trades" element={<ProtectedRoute><Layout><Trades /></Layout></ProtectedRoute>} />
+              <Route path="/strategies" element={<ProtectedRoute><Layout><Strategies /></Layout></ProtectedRoute>} />
+              <Route path="/calendar" element={<ProtectedRoute><Layout><CalendarPage /></Layout></ProtectedRoute>} />
+              <Route path="/analytics" element={<ProtectedRoute><Layout><Analytics /></Layout></ProtectedRoute>} />
+              <Route path="/ai-chat" element={<ProtectedRoute><Layout><AIChat /></Layout></ProtectedRoute>} />
+              
+              {/* Protected Settings Routes */}
+              <Route path="/settings" element={<ProtectedRoute><Profile /></ProtectedRoute>} />
+              <Route path="/settings/profile" element={<ProtectedRoute><Profile /></ProtectedRoute>} />
+              <Route path="/settings/accounts" element={<ProtectedRoute><AccountsBrokers /></ProtectedRoute>} />
+              <Route path="/settings/trading" element={<ProtectedRoute><TradingPreferences /></ProtectedRoute>} />
+              <Route path="/settings/journal" element={<ProtectedRoute><JournalSettings /></ProtectedRoute>} />
+              <Route path="/settings/ai" element={<ProtectedRoute><AISettings /></ProtectedRoute>} />
+              <Route path="/settings/notifications" element={<ProtectedRoute><Notifications /></ProtectedRoute>} />
+              <Route path="/settings/data" element={<ProtectedRoute><DataImport /></ProtectedRoute>} />
+              <Route path="/settings/billing" element={<ProtectedRoute><Billing /></ProtectedRoute>} />
+              <Route path="/settings/security" element={<ProtectedRoute><Security /></ProtectedRoute>} />
+              <Route path="/settings/appearance" element={<ProtectedRoute><Appearance /></ProtectedRoute>} />
+              <Route path="/settings/api-keys" element={<ProtectedRoute><APIKeys /></ProtectedRoute>} />
+              <Route path="/settings/about" element={<ProtectedRoute><About /></ProtectedRoute>} />
+              
+              <Route path="*" element={<NotFound />} />
+            </Routes>
+          </BrowserRouter>
+        </AuthProvider>
       </TooltipProvider>
     </ThemeProvider>
   </QueryClientProvider>

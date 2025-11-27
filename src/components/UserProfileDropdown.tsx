@@ -9,6 +9,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { cn } from "@/lib/utils";
+import { useAuth } from "@/contexts/AuthContext";
 
 interface UserProfileDropdownProps {
   collapsed: boolean;
@@ -16,13 +17,22 @@ interface UserProfileDropdownProps {
 
 export const UserProfileDropdown = ({ collapsed }: UserProfileDropdownProps) => {
   const navigate = useNavigate();
+  const { user, signOut } = useAuth();
   const [isOpen, setIsOpen] = useState(false);
+
+  const handleSignOut = async () => {
+    await signOut();
+    navigate('/auth');
+  };
 
   const menuItems = [
     { icon: User, label: "View Profile", onClick: () => navigate("/settings/profile") },
     { icon: Settings, label: "Settings", onClick: () => navigate("/settings") },
     { icon: CreditCard, label: "Billing", onClick: () => navigate("/settings/billing") },
   ];
+
+  const userEmail = user?.email || "trader@example.com";
+  const userInitial = userEmail.charAt(0).toUpperCase();
 
   return (
     <DropdownMenu open={isOpen} onOpenChange={setIsOpen}>
@@ -34,13 +44,13 @@ export const UserProfileDropdown = ({ collapsed }: UserProfileDropdownProps) => 
           )}
         >
           <div className="h-8 w-8 rounded-full bg-primary flex items-center justify-center flex-shrink-0">
-            <span className="text-xs font-semibold text-primary-foreground">U</span>
+            <span className="text-xs font-semibold text-primary-foreground">{userInitial}</span>
           </div>
           {!collapsed && (
             <>
               <div className="flex-1 min-w-0 text-left">
-                <p className="text-sm font-medium truncate">Trader</p>
-                <p className="text-xs text-muted-foreground truncate">Pro Plan</p>
+                <p className="text-sm font-medium truncate">{userEmail}</p>
+                <p className="text-xs text-muted-foreground truncate">TradeLM</p>
               </div>
               <ChevronDown className={cn("h-4 w-4 transition-transform", isOpen && "rotate-180")} />
             </>
@@ -55,7 +65,7 @@ export const UserProfileDropdown = ({ collapsed }: UserProfileDropdownProps) => 
           </DropdownMenuItem>
         ))}
         <DropdownMenuSeparator />
-        <DropdownMenuItem className="text-destructive">
+        <DropdownMenuItem className="text-destructive" onClick={handleSignOut}>
           <LogOut className="mr-2 h-4 w-4" />
           <span>Log out</span>
         </DropdownMenuItem>
