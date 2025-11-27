@@ -45,7 +45,7 @@ const LayoutContent = ({ children }: LayoutProps) => {
 
       <main 
         className={cn(
-          "flex-1 transition-all duration-300 ease-in-out pb-32 min-h-screen",
+          "flex-1 transition-all duration-300 ease-in-out min-h-screen",
           !isMobile && (collapsed ? "ml-16" : "ml-60"),
           isMobile && "mt-16"
         )}
