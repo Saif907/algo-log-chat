@@ -10,19 +10,85 @@ import {
 } from "@/components/ui/select";
 import { ChatInput } from "@/components/ChatInput";
 import { Badge } from "@/components/ui/badge";
+import { DayHoverCard } from "@/components/calendar/DayHoverCard";
+import { DayDetailModal } from "@/components/calendar/DayDetailModal";
 
 // Mock data for demonstration
-const mockTradeData = {
-  18: { trades: 1, pnl: -700 },
-  21: { trades: 1, pnl: 450 },
-  22: { trades: 1, pnl: 0 },
-  23: { trades: 1, pnl: 0 },
-  24: { trades: 0, pnl: 0 }, // Today
+const mockTradeData: Record<number, any> = {
+  18: { 
+    trades: 1, 
+    pnl: -700,
+    winRate: 0,
+    bestStrategy: "Breakout",
+    totalR: -2.5,
+    emotion: "Frustrated",
+    playbooks: [{ name: "Breakout", count: 1 }],
+    bestTrade: { symbol: "AAPL", pnl: 0 },
+    worstTrade: { symbol: "AAPL", pnl: -700 },
+    tradesList: [
+      { id: "1", symbol: "AAPL", direction: "Long", entry: 150, exit: 143, pnl: -700 }
+    ]
+  },
+  21: { 
+    trades: 1, 
+    pnl: 450,
+    winRate: 100,
+    bestStrategy: "Momentum",
+    totalR: 1.5,
+    emotion: "Confident",
+    playbooks: [{ name: "Momentum", count: 1 }],
+    bestTrade: { symbol: "TSLA", pnl: 450 },
+    worstTrade: { symbol: "TSLA", pnl: 450 },
+    tradesList: [
+      { id: "2", symbol: "TSLA", direction: "Long", entry: 200, exit: 215, pnl: 450 }
+    ]
+  },
+  22: { 
+    trades: 1, 
+    pnl: 0,
+    winRate: 0,
+    bestStrategy: "Range",
+    totalR: 0,
+    emotion: "Neutral",
+    playbooks: [{ name: "Range", count: 1 }],
+    bestTrade: { symbol: "MSFT", pnl: 0 },
+    worstTrade: { symbol: "MSFT", pnl: 0 },
+    tradesList: [
+      { id: "3", symbol: "MSFT", direction: "Short", entry: 300, exit: 300, pnl: 0 }
+    ]
+  },
+  23: { 
+    trades: 1, 
+    pnl: 0,
+    winRate: 0,
+    bestStrategy: "Scalp",
+    totalR: 0,
+    emotion: "Calm",
+    playbooks: [{ name: "Scalp", count: 1 }],
+    bestTrade: { symbol: "GOOGL", pnl: 0 },
+    worstTrade: { symbol: "GOOGL", pnl: 0 },
+    tradesList: [
+      { id: "4", symbol: "GOOGL", direction: "Long", entry: 140, exit: 140, pnl: 0 }
+    ]
+  },
+  24: { 
+    trades: 0, 
+    pnl: 0,
+    winRate: 0,
+    totalR: 0,
+    emotion: "N/A",
+    playbooks: [],
+    bestTrade: { symbol: "-", pnl: 0 },
+    worstTrade: { symbol: "-", pnl: 0 },
+    tradesList: []
+  },
 };
 
 export const CalendarPage = () => {
   const [currentDate, setCurrentDate] = useState(new Date(2025, 10, 1)); // November 2025
   const [viewMode, setViewMode] = useState("P&L Heat");
+  const [selectedDay, setSelectedDay] = useState<number | null>(null);
+  const [modalOpen, setModalOpen] = useState(false);
 
   const daysOfWeek = ["SUN", "MON", "TUE", "WED", "THU", "FRI", "SAT"];
   
@@ -73,6 +139,23 @@ export const CalendarPage = () => {
 
   const isToday = (day: number | null) => {
     return day === 24;
+  };
+
+  const handleDayClick = (day: number | null) => {
+    if (day && mockTradeData[day]) {
+      setSelectedDay(day);
+      setModalOpen(true);
+    }
+  };
+
+  const getSelectedDayData = () => {
+    if (!selectedDay) return null;
+    return mockTradeData[selectedDay];
+  };
+
+  const getSelectedDate = () => {
+    if (!selectedDay) return null;
+    return new Date(currentDate.getFullYear(), currentDate.getMonth(), selectedDay);
   };
 
   return (
@@ -147,48 +230,58 @@ export const CalendarPage = () => {
 
           {/* Calendar days */}
           <div className="grid grid-cols-7">
-            {calendarDays.map((day, index) => (
-              <div
-                key={index}
-                className={`min-h-[120px] border-r border-b border-border p-3 relative ${
-                  day ? getCellStyle(day) : ""
-                } ${!day ? "bg-muted/30" : ""}`}
-              >
-                {day && (
-                  <>
-                    <div className="flex items-start justify-between mb-2">
-                      <span className="text-sm font-medium">{day}</span>
-                      {mockTradeData[day as keyof typeof mockTradeData]?.trades > 0 && (
-                        <Badge
-                          variant="secondary"
-                          className="h-5 w-5 p-0 flex items-center justify-center rounded-full text-xs"
-                        >
-                          {mockTradeData[day as keyof typeof mockTradeData]?.trades}
-                        </Badge>
-                      )}
-                    </div>
-                    {mockTradeData[day as keyof typeof mockTradeData] && 
-                     mockTradeData[day as keyof typeof mockTradeData].pnl !== 0 && (
-                      <div
-                        className={`text-sm font-semibold ${
-                          mockTradeData[day as keyof typeof mockTradeData].pnl > 0
-                            ? "text-success"
-                            : "text-destructive"
-                        }`}
-                      >
-                        ${mockTradeData[day as keyof typeof mockTradeData].pnl > 0 ? "+" : ""}
-                        {mockTradeData[day as keyof typeof mockTradeData].pnl.toFixed(2)}
-                      </div>
+            {calendarDays.map((day, index) => {
+              const dayData = day ? mockTradeData[day] : null;
+              const hasTrades = dayData && dayData.trades > 0;
+
+              return (
+                <DayHoverCard
+                  key={index}
+                  day={day || 0}
+                  data={dayData || { trades: 0, pnl: 0 }}
+                >
+                  <div
+                    onClick={() => handleDayClick(day)}
+                    className={`min-h-[120px] border-r border-b border-border p-3 relative transition-all duration-200 ${
+                      day ? getCellStyle(day) : ""
+                    } ${!day ? "bg-muted/30" : ""} ${
+                      hasTrades ? "cursor-pointer hover:scale-[1.02] hover:shadow-lg hover:z-10" : ""
+                    }`}
+                  >
+                    {day && (
+                      <>
+                        <div className="flex items-start justify-between mb-2">
+                          <span className="text-sm font-medium">{day}</span>
+                          {dayData?.trades > 0 && (
+                            <Badge
+                              variant="secondary"
+                              className="h-5 w-5 p-0 flex items-center justify-center rounded-full text-xs"
+                            >
+                              {dayData.trades}
+                            </Badge>
+                          )}
+                        </div>
+                        {dayData && dayData.pnl !== 0 && (
+                          <div
+                            className={`text-sm font-semibold ${
+                              dayData.pnl > 0 ? "text-success" : "text-destructive"
+                            }`}
+                          >
+                            ${dayData.pnl > 0 ? "+" : ""}
+                            {dayData.pnl.toFixed(2)}
+                          </div>
+                        )}
+                        {isToday(day) && (
+                          <div className="absolute bottom-2 left-1/2 -translate-x-1/2">
+                            <div className="h-2 w-2 rounded-full bg-foreground" />
+                          </div>
+                        )}
+                      </>
                     )}
-                    {isToday(day) && (
-                      <div className="absolute bottom-2 left-1/2 -translate-x-1/2">
-                        <div className="h-2 w-2 rounded-full bg-foreground" />
-                      </div>
-                    )}
-                  </>
-                )}
-              </div>
-            ))}
+                  </div>
+                </DayHoverCard>
+              );
+            })}
           </div>
         </div>
 
@@ -204,6 +297,13 @@ export const CalendarPage = () => {
           </div>
         </div>
       </div>
+
+      <DayDetailModal
+        open={modalOpen}
+        onOpenChange={setModalOpen}
+        date={getSelectedDate()}
+        data={getSelectedDayData()}
+      />
 
       <ChatInput placeholder="Ask about your trading calendar..." />
     </div>
