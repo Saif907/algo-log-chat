@@ -20,11 +20,12 @@ interface TradeCardProps {
     mistakes: number;
     notes: number;
   };
+  onClick?: () => void;
 }
 
-export const TradeCard = ({ trade }: TradeCardProps) => {
+export const TradeCard = ({ trade, onClick }: TradeCardProps) => {
   return (
-    <Card className="p-4 bg-card border-border/50 space-y-3">
+    <Card className="p-4 bg-card border-border/50 space-y-3 cursor-pointer hover:bg-muted/30 transition-colors" onClick={onClick}>
       <div className="flex items-start justify-between">
         <div className="flex items-center gap-2">
           <span className="font-semibold text-lg">{trade.symbol}</span>

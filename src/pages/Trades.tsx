@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -65,6 +66,7 @@ const mockTrades = [
 ];
 
 export const Trades = () => {
+  const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState("all");
   const [isAddTradeOpen, setIsAddTradeOpen] = useState(false);
   const [filtersOpen, setFiltersOpen] = useState(false);
@@ -222,7 +224,11 @@ export const Trades = () => {
                 </TableHeader>
                 <TableBody>
                   {mockTrades.map((trade) => (
-                    <TableRow key={trade.id} className="border-border/50">
+                    <TableRow 
+                      key={trade.id} 
+                      className="border-border/50 cursor-pointer hover:bg-muted/30 transition-colors"
+                      onClick={() => navigate(`/trades/${trade.id}`)}
+                    >
                       <TableCell>
                         <div className="flex items-center gap-2">
                           <span className="font-semibold">{trade.symbol}</span>
@@ -318,7 +324,7 @@ export const Trades = () => {
         {/* Mobile Card View */}
         <div className="lg:hidden space-y-3">
           {mockTrades.map((trade) => (
-            <TradeCard key={trade.id} trade={trade} />
+            <TradeCard key={trade.id} trade={trade} onClick={() => navigate(`/trades/${trade.id}`)} />
           ))}
           
           {/* Mobile Pagination */}
