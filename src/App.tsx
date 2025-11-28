@@ -12,6 +12,7 @@ import { Dashboard } from "./pages/Dashboard";
 import { AIChat } from "./pages/AIChat";
 import { Markets } from "./pages/Markets";
 import { Trades } from "./pages/Trades";
+import { TradeDetail } from "./pages/TradeDetail";
 import { Strategies } from "./pages/Strategies";
 import { CalendarPage } from "./pages/CalendarPage";
 import { Analytics } from "./pages/Analytics";
@@ -49,6 +50,7 @@ const App = () => (
               <Route path="/" element={<ProtectedRoute><Layout><Dashboard /></Layout></ProtectedRoute>} />
               <Route path="/markets" element={<ProtectedRoute><Layout><Markets /></Layout></ProtectedRoute>} />
               <Route path="/trades" element={<ProtectedRoute><Layout><Trades /></Layout></ProtectedRoute>} />
+              <Route path="/trades/:id" element={<ProtectedRoute><Layout><TradeDetail /></Layout></ProtectedRoute>} />
               <Route path="/strategies" element={<ProtectedRoute><Layout><Strategies /></Layout></ProtectedRoute>} />
               <Route path="/calendar" element={<ProtectedRoute><Layout><CalendarPage /></Layout></ProtectedRoute>} />
               <Route path="/analytics" element={<ProtectedRoute><Layout><Analytics /></Layout></ProtectedRoute>} />
