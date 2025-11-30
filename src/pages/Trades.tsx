@@ -30,6 +30,7 @@ const mockTrades = [
     playbook: "ORB Breakout",
     mistakes: 2,
     notes: 3,
+    tags: ["Momentum", "Follow Plan"],
   },
   {
     id: 2,
@@ -46,11 +47,12 @@ const mockTrades = [
     playbook: "Pullback Entry",
     mistakes: 1,
     notes: 2,
+    tags: ["Tech", "Patient"],
   },
   {
     id: 3,
     symbol: "BANKNIFTY",
-    direction: "Long",
+    direction: "Short",
     instrument: "Options",
     account: "Zerodha",
     entry: { date: "Nov 21, 2025", time: "09:18", price: 145.5 },
@@ -62,6 +64,7 @@ const mockTrades = [
     playbook: "No playbook",
     mistakes: 4,
     notes: 2,
+    tags: ["FOMO", "Revenge"],
   },
 ];
 
@@ -94,33 +97,6 @@ export const Trades = () => {
               <span className="hidden sm:inline">Add Trade</span>
             </Button>
           </div>
-        </div>
-
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 sm:gap-4">
-          <Card className="p-3 sm:p-4 bg-card border-border/50">
-            <p className="text-xs sm:text-sm text-muted-foreground mb-1">Total Trades</p>
-            <p className="text-xl sm:text-2xl font-bold">5</p>
-          </Card>
-          <Card className="p-3 sm:p-4 bg-card border-border/50">
-            <p className="text-xs sm:text-sm text-muted-foreground mb-1">Win Rate</p>
-            <p className="text-xl sm:text-2xl font-bold text-success">80.0%</p>
-          </Card>
-          <Card className="p-3 sm:p-4 bg-card border-border/50">
-            <p className="text-xs sm:text-sm text-muted-foreground mb-1">Winning</p>
-            <p className="text-xl sm:text-2xl font-bold text-success">4</p>
-          </Card>
-          <Card className="p-3 sm:p-4 bg-card border-border/50">
-            <p className="text-xs sm:text-sm text-muted-foreground mb-1">Losing</p>
-            <p className="text-xl sm:text-2xl font-bold text-destructive">1</p>
-          </Card>
-          <Card className="p-3 sm:p-4 bg-card border-border/50">
-            <p className="text-xs sm:text-sm text-muted-foreground mb-1">Total P/L</p>
-            <p className="text-xl sm:text-2xl font-bold text-success">+$242.50</p>
-          </Card>
-          <Card className="p-3 sm:p-4 bg-card border-border/50">
-            <p className="text-xs sm:text-sm text-muted-foreground mb-1">Avg R</p>
-            <p className="text-xl sm:text-2xl font-bold text-[#00d4ff]">1.50R</p>
-          </Card>
         </div>
 
         <Tabs value={activeTab} onValueChange={setActiveTab}>
@@ -208,94 +184,75 @@ export const Trades = () => {
               <Table>
                 <TableHeader>
                   <TableRow className="border-border/50 hover:bg-transparent">
+                    <TableHead className="min-w-[120px]">Date</TableHead>
                     <TableHead className="min-w-[100px]">Symbol</TableHead>
-                    <TableHead className="min-w-[100px]">Direction</TableHead>
-                    <TableHead className="min-w-[100px]">Instrument</TableHead>
-                    <TableHead className="min-w-[120px]">Account</TableHead>
-                    <TableHead className="min-w-[150px]">Entry</TableHead>
-                    <TableHead className="min-w-[150px]">Exit</TableHead>
-                    <TableHead className="min-w-[100px]">Holding</TableHead>
-                    <TableHead className="min-w-[100px]">P/L</TableHead>
+                    <TableHead className="min-w-[80px]">Side</TableHead>
+                    <TableHead className="min-w-[120px]">P/L</TableHead>
                     <TableHead className="min-w-[100px]">R-Multiple</TableHead>
-                    <TableHead className="min-w-[100px]">Return %</TableHead>
-                    <TableHead className="min-w-[120px]">Playbook</TableHead>
-                    <TableHead className="min-w-[200px]">Details</TableHead>
+                    <TableHead className="min-w-[140px]">Playbook</TableHead>
+                    <TableHead className="min-w-[200px]">Tags</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {mockTrades.map((trade) => (
                     <TableRow 
                       key={trade.id} 
-                      className="border-border/50 cursor-pointer hover:bg-muted/30 transition-colors"
+                      className={`border-border/50 cursor-pointer transition-colors ${
+                        trade.pl > 0 ? 'hover:bg-success/5 border-l-2 border-l-success' : 'hover:bg-destructive/5 border-l-2 border-l-destructive'
+                      }`}
                       onClick={() => navigate(`/trades/${trade.id}`)}
                     >
                       <TableCell>
-                        <div className="flex items-center gap-2">
-                          <span className="font-semibold">{trade.symbol}</span>
-                          <Copy className="h-3 w-3 text-muted-foreground cursor-pointer" />
+                        <div className="space-y-0.5">
+                          <div className="font-medium">{trade.entry.date}</div>
+                          <div className="text-xs text-muted-foreground">{trade.entry.time}</div>
                         </div>
                       </TableCell>
                       <TableCell>
-                        <Badge className="bg-[#00d4ff]/20 text-[#00d4ff] hover:bg-[#00d4ff]/30 border-[#00d4ff]/50">
+                        <div className="font-semibold">{trade.symbol}</div>
+                      </TableCell>
+                      <TableCell>
+                        <Badge 
+                          variant="outline"
+                          className={trade.direction === "Long" 
+                            ? "bg-success/10 text-success border-success/30" 
+                            : "bg-destructive/10 text-destructive border-destructive/30"
+                          }
+                        >
                           {trade.direction}
                         </Badge>
                       </TableCell>
-                      <TableCell>{trade.instrument}</TableCell>
-                      <TableCell className="text-muted-foreground">{trade.account}</TableCell>
                       <TableCell>
-                        <div className="space-y-1">
-                          <div className="flex items-center gap-1 text-xs text-muted-foreground">
-                            <Calendar className="h-3 w-3" />
-                            {trade.entry.date}
-                          </div>
-                          <div className="flex items-center gap-1 text-xs text-muted-foreground">
-                            <Clock className="h-3 w-3" />
-                            {trade.entry.time} @ ${trade.entry.price}
-                          </div>
+                        <div className={`font-semibold ${trade.pl > 0 ? "text-success" : "text-destructive"}`}>
+                          {trade.pl > 0 ? "+" : ""}${trade.pl.toFixed(2)}
                         </div>
                       </TableCell>
                       <TableCell>
-                        <div className="space-y-1">
-                          <div className="flex items-center gap-1 text-xs text-muted-foreground">
-                            <Calendar className="h-3 w-3" />
-                            {trade.exit.date}
-                          </div>
-                          <div className="flex items-center gap-1 text-xs text-muted-foreground">
-                            <Clock className="h-3 w-3" />
-                            {trade.exit.time} @ ${trade.exit.price}
-                          </div>
+                        <div className={`font-medium ${trade.rMultiple > 0 ? "text-success" : "text-destructive"}`}>
+                          {trade.rMultiple > 0 ? "+" : ""}{trade.rMultiple.toFixed(1)}R
                         </div>
                       </TableCell>
-                      <TableCell>{trade.holdingTime}</TableCell>
-                      <TableCell className={trade.pl > 0 ? "text-success" : "text-destructive"}>
-                        {trade.pl > 0 ? "+" : ""}${trade.pl.toFixed(2)}
-                      </TableCell>
-                      <TableCell className={trade.rMultiple > 0 ? "text-success" : "text-destructive"}>
-                        {trade.rMultiple > 0 ? "+" : ""}{trade.rMultiple.toFixed(1)}R
-                      </TableCell>
-                      <TableCell className={trade.returnPct > 0 ? "text-success" : "text-destructive"}>
-                        {trade.returnPct > 0 ? "+" : ""}{trade.returnPct.toFixed(2)}%
-                      </TableCell>
                       <TableCell>
-                        <div className="flex items-center gap-1">
-                          {trade.playbook !== "No playbook" && <div className="w-2 h-2 rounded-full bg-primary" />}
-                          <span className={trade.playbook === "No playbook" ? "text-muted-foreground" : ""}>
+                        <div className="flex items-center gap-1.5">
+                          {trade.playbook !== "No playbook" && (
+                            <div className="w-1.5 h-1.5 rounded-full bg-primary" />
+                          )}
+                          <span className={trade.playbook === "No playbook" ? "text-muted-foreground text-sm" : "text-sm"}>
                             {trade.playbook}
                           </span>
                         </div>
                       </TableCell>
                       <TableCell>
-                        <div className="flex items-center gap-2">
-                          <Badge variant="outline" className="text-xs">
-                            <span className="text-[#00d4ff]">⚡</span> Plan
-                          </Badge>
-                          <Badge variant="destructive" className="text-xs">
-                            {trade.mistakes} mistakes
-                          </Badge>
-                          <Button variant="ghost" size="sm" className="h-6 w-6 p-0">
-                            <Heart className="h-3 w-3" />
-                          </Button>
-                          <span className="text-xs text-muted-foreground">{trade.notes}</span>
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          {trade.tags.slice(0, 3).map((tag, idx) => (
+                            <Badge 
+                              key={idx} 
+                              variant="secondary" 
+                              className="text-xs bg-muted/50 hover:bg-muted"
+                            >
+                              {tag}
+                            </Badge>
+                          ))}
                         </div>
                       </TableCell>
                     </TableRow>
