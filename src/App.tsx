@@ -14,6 +14,7 @@ import { Markets } from "./pages/Markets";
 import { Trades } from "./pages/Trades";
 import { TradeDetail } from "./pages/TradeDetail";
 import { Strategies } from "./pages/Strategies";
+import { StrategyDetail } from "./pages/StrategyDetail";
 import { CalendarPage } from "./pages/CalendarPage";
 import { Analytics } from "./pages/Analytics";
 import NotFound from "./pages/NotFound";
@@ -78,6 +79,7 @@ const App = () => (
               <Route path="/trades" element={<ProtectedRoute><Layout><Trades /></Layout></ProtectedRoute>} />
               <Route path="/trades/:id" element={<ProtectedRoute><Layout><TradeDetail /></Layout></ProtectedRoute>} />
               <Route path="/strategies" element={<ProtectedRoute><Layout><Strategies /></Layout></ProtectedRoute>} />
+              <Route path="/strategies/:id" element={<ProtectedRoute><Layout><StrategyDetail /></Layout></ProtectedRoute>} />
               <Route path="/calendar" element={<ProtectedRoute><Layout><CalendarPage /></Layout></ProtectedRoute>} />
               <Route path="/analytics" element={<ProtectedRoute><Layout><Analytics /></Layout></ProtectedRoute>} />
               <Route path="/ai-chat" element={<ProtectedRoute><Layout><AIChat /></Layout></ProtectedRoute>} />
