@@ -5,7 +5,8 @@ import {
   CreditCard, Shield, Palette, Key, HelpCircle, Bot
 } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { SidebarProvider, useSidebar } from "@/contexts/SidebarContext";
+import { useSidebar } from "@/contexts/SidebarContext";
+import { Sidebar } from "../Sidebar";
 
 interface SettingsLayoutProps {
   children: ReactNode;
@@ -42,16 +43,29 @@ const settingsSections = [
 ];
 
 const SettingsLayoutContent = ({ children }: SettingsLayoutProps) => {
-  const { collapsed, isMobile } = useSidebar();
+  const { collapsed, isMobile, mobileOpen, setMobileOpen } = useSidebar();
 
   return (
-    <div className="min-h-screen bg-background">
-      <div className={cn(
-        "flex",
-        !isMobile && (collapsed ? "ml-16" : "ml-60")
+    <div className="flex min-h-screen w-full bg-background">
+      {/* Main Sidebar */}
+      <Sidebar />
+      
+      {/* Mobile Overlay */}
+      {isMobile && mobileOpen && (
+        <div
+          className="fixed inset-0 bg-black/50 z-30 md:hidden"
+          onClick={() => setMobileOpen(false)}
+        />
+      )}
+
+      {/* Settings Sidebar */}
+      <aside className={cn(
+        "fixed left-0 top-0 z-30 h-screen border-r border-border bg-card transition-all duration-300 ease-in-out",
+        "w-64",
+        !isMobile && (collapsed ? "ml-16" : "ml-60"),
+        isMobile && "mt-16"
       )}>
-        {/* Settings Sidebar */}
-        <aside className="w-64 border-r border-border bg-card min-h-screen p-6">
+        <div className="h-full overflow-y-auto p-6">
           <div className="mb-8">
             <h2 className="text-2xl font-bold mb-1">Settings</h2>
             <p className="text-sm text-muted-foreground">Manage your workspace</p>
@@ -60,7 +74,7 @@ const SettingsLayoutContent = ({ children }: SettingsLayoutProps) => {
           <nav className="space-y-6">
             {settingsSections.map((section) => (
               <div key={section.title}>
-                <h3 className="text-xs font-semibold text-muted-foreground mb-2 px-2">
+                <h3 className="text-xs font-semibold text-muted-foreground mb-2 px-2 uppercase tracking-wider">
                   {section.title}
                 </h3>
                 <div className="space-y-1">
@@ -70,10 +84,10 @@ const SettingsLayoutContent = ({ children }: SettingsLayoutProps) => {
                       to={item.path}
                       className={({ isActive }) =>
                         cn(
-                          "flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-colors",
+                          "flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-colors",
                           isActive
-                            ? "bg-muted text-foreground font-medium"
-                            : "text-muted-foreground hover:bg-muted/50 hover:text-foreground"
+                            ? "bg-secondary text-primary"
+                            : "text-muted-foreground hover:bg-secondary/50 hover:text-foreground"
                         )
                       }
                     >
@@ -85,21 +99,23 @@ const SettingsLayoutContent = ({ children }: SettingsLayoutProps) => {
               </div>
             ))}
           </nav>
-        </aside>
+        </div>
+      </aside>
 
-        {/* Settings Content */}
-        <main className="flex-1 p-8">
+      {/* Settings Content */}
+      <main className={cn(
+        "flex-1 transition-all duration-300 ease-in-out",
+        !isMobile && (collapsed ? "ml-80" : "ml-[34rem]"),
+        isMobile && "ml-64 mt-16"
+      )}>
+        <div className="p-8">
           {children}
-        </main>
-      </div>
+        </div>
+      </main>
     </div>
   );
 };
 
 export const SettingsLayout = ({ children }: SettingsLayoutProps) => {
-  return (
-    <SidebarProvider>
-      <SettingsLayoutContent>{children}</SettingsLayoutContent>
-    </SidebarProvider>
-  );
+  return <SettingsLayoutContent>{children}</SettingsLayoutContent>;
 };
