@@ -1,4 +1,4 @@
-import { Home, TrendingUp, Layers, BookOpen, Calendar, BarChart3, MessageSquare, ChevronLeft, ChevronRight, X } from "lucide-react";
+import { Home, TrendingUp, Layers, BookOpen, Calendar, BarChart3, MessageSquare, X } from "lucide-react";
 import { NavLink } from "./NavLink";
 import { cn } from "@/lib/utils";
 import { Button } from "./ui/button";
@@ -19,28 +19,36 @@ const toolsNav = [
 ];
 
 export const Sidebar = () => {
-  const { collapsed, setCollapsed, isMobile, mobileOpen, setMobileOpen } = useSidebar();
+  const { collapsed, isMobile, mobileOpen, setMobileOpen, isHovered, setIsHovered } = useSidebar();
+
+  // On desktop, show expanded when hovered over collapsed sidebar
+  const isExpanded = isMobile ? mobileOpen : (!collapsed || isHovered);
 
   return (
     <aside
+      onMouseEnter={() => !isMobile && collapsed && setIsHovered(true)}
+      onMouseLeave={() => !isMobile && setIsHovered(false)}
       className={cn(
         "fixed left-0 top-0 z-40 h-screen bg-card border-r border-border transition-all duration-300 ease-in-out flex flex-col",
-        collapsed ? "w-16" : "w-60",
+        isExpanded ? "w-60" : "w-16",
         isMobile && !mobileOpen && "-translate-x-full",
         isMobile && "z-50"
       )}
     >
       {/* Header */}
       <div className="h-16 flex items-center justify-between px-4 border-b border-border">
-        {!collapsed && (
-          <div className="flex items-center gap-2">
-            <div className="w-8 h-8 bg-gradient-to-br from-primary to-purple-600 rounded-lg flex items-center justify-center">
-              <span className="text-white font-bold text-sm">T</span>
-            </div>
-            <span className="font-semibold text-lg">TradeLM</span>
+        <div className={cn(
+          "flex items-center gap-2 transition-all duration-300",
+          !isExpanded && "justify-center w-full"
+        )}>
+          <div className="w-8 h-8 bg-gradient-to-br from-primary to-purple-600 rounded-lg flex items-center justify-center flex-shrink-0">
+            <span className="text-white font-bold text-sm">T</span>
           </div>
-        )}
-        {isMobile ? (
+          {isExpanded && (
+            <span className="font-semibold text-lg whitespace-nowrap">TradeLM</span>
+          )}
+        </div>
+        {isMobile && mobileOpen && (
           <Button
             variant="ghost"
             size="icon"
@@ -49,15 +57,6 @@ export const Sidebar = () => {
           >
             <X className="h-4 w-4" />
           </Button>
-        ) : (
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={() => setCollapsed(!collapsed)}
-            className={cn("h-8 w-8", collapsed && "mx-auto")}
-          >
-            {collapsed ? <ChevronRight className="h-4 w-4" /> : <ChevronLeft className="h-4 w-4" />}
-          </Button>
         )}
       </div>
 
@@ -65,7 +64,7 @@ export const Sidebar = () => {
       <div className="flex-1 overflow-y-auto py-4">
         {/* Main Section */}
         <div className="px-3 mb-6">
-          {!collapsed && (
+          {isExpanded && (
             <h2 className="mb-2 px-3 text-xs font-semibold text-muted-foreground uppercase tracking-wider">
               Main
             </h2>
@@ -78,12 +77,12 @@ export const Sidebar = () => {
                 end
                 className={cn(
                   "flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors hover:bg-secondary",
-                  collapsed && "justify-center"
+                  !isExpanded && "justify-center"
                 )}
                 activeClassName="bg-secondary text-primary"
               >
                 <item.icon className="h-5 w-5 flex-shrink-0" />
-                {!collapsed && <span>{item.title}</span>}
+                {isExpanded && <span>{item.title}</span>}
               </NavLink>
             ))}
           </nav>
@@ -91,7 +90,7 @@ export const Sidebar = () => {
 
         {/* Tools Section */}
         <div className="px-3">
-          {!collapsed && (
+          {isExpanded && (
             <h2 className="mb-2 px-3 text-xs font-semibold text-muted-foreground uppercase tracking-wider">
               Tools
             </h2>
@@ -104,12 +103,12 @@ export const Sidebar = () => {
                 end
                 className={cn(
                   "flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors hover:bg-secondary",
-                  collapsed && "justify-center"
+                  !isExpanded && "justify-center"
                 )}
                 activeClassName="bg-secondary text-primary"
               >
                 <item.icon className="h-5 w-5 flex-shrink-0" />
-                {!collapsed && <span>{item.title}</span>}
+                {isExpanded && <span>{item.title}</span>}
               </NavLink>
             ))}
           </nav>
@@ -118,7 +117,7 @@ export const Sidebar = () => {
 
       {/* User Section */}
       <div className="border-t border-border p-4">
-        <UserProfileDropdown collapsed={collapsed} />
+        <UserProfileDropdown collapsed={!isExpanded} />
       </div>
     </aside>
   );

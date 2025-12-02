@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -5,6 +6,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, ResponsiveContainer, ReferenceLine, ReferenceDot } from "recharts";
 import { Edit, Trash2, Copy, Upload, X } from "lucide-react";
 import { useParams, useNavigate } from "react-router-dom";
+import { EditTradeModal } from "@/components/trades/EditTradeModal";
 
 // Mock trade data - replace with actual data fetching
 const mockTrade = {
@@ -62,9 +64,27 @@ const relatedTrades = [
 export const TradeDetail = () => {
   const { id } = useParams();
   const navigate = useNavigate();
-  const trade = mockTrade; // Replace with actual data fetching based on id
+  const trade = mockTrade;
+  const [isEditOpen, setIsEditOpen] = useState(false);
 
   const isProfitable = trade.pnl >= 0;
+  
+  const tradeForEdit = {
+    id: parseInt(trade.id),
+    symbol: trade.symbol,
+    side: trade.direction.toLowerCase(),
+    entryPrice: trade.entry,
+    exitPrice: trade.exit,
+    quantity: trade.quantity,
+    entryDate: "2024-11-27T09:30",
+    exitDate: "2024-11-27T10:15",
+    stopLoss: trade.stopLoss,
+    target: trade.target,
+    strategy: "breakout",
+    emotionalState: trade.emotion.toLowerCase(),
+    notes: trade.notes,
+    tags: trade.tags,
+  };
 
   return (
     <div className="min-h-screen p-4 md:p-6 lg:p-8 space-y-6">
@@ -95,7 +115,7 @@ export const TradeDetail = () => {
           </div>
 
           <div className="flex gap-2">
-            <Button variant="outline" size="icon">
+            <Button variant="outline" size="icon" onClick={() => setIsEditOpen(true)}>
               <Edit className="h-4 w-4" />
             </Button>
             <Button variant="outline" size="icon">
@@ -107,6 +127,8 @@ export const TradeDetail = () => {
           </div>
         </div>
       </div>
+      
+      <EditTradeModal open={isEditOpen} onOpenChange={setIsEditOpen} trade={tradeForEdit} />
 
       {/* Chart Section */}
       <Card className="p-6">
