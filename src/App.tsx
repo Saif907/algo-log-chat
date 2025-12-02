@@ -8,6 +8,7 @@ import { ThemeProvider } from "./components/ThemeProvider";
 import { AuthProvider } from "./contexts/AuthContext";
 import { ProtectedRoute } from "./components/ProtectedRoute";
 import { Auth } from "./pages/Auth";
+import Landing from "./pages/Landing";
 import { Dashboard } from "./pages/Dashboard";
 import { AIChat } from "./pages/AIChat";
 import { Markets } from "./pages/Markets";
@@ -58,6 +59,7 @@ const App = () => (
           <BrowserRouter>
             <Routes>
             {/* Public Routes */}
+            <Route path="/landing" element={<Landing />} />
             <Route path="/auth" element={<Auth />} />
             
             {/* Legal Pages (Public) */}

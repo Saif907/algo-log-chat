@@ -5,7 +5,7 @@ import {
   CreditCard, Shield, Palette, Key, HelpCircle, Bot
 } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { useSidebar } from "@/contexts/SidebarContext";
+import { useSidebar, SidebarProvider } from "@/contexts/SidebarContext";
 import { Sidebar } from "../Sidebar";
 
 interface SettingsLayoutProps {
@@ -43,7 +43,7 @@ const settingsSections = [
 ];
 
 const SettingsLayoutContent = ({ children }: SettingsLayoutProps) => {
-  const { collapsed, isMobile, mobileOpen, setMobileOpen } = useSidebar();
+  const { isMobile, mobileOpen, setMobileOpen } = useSidebar();
 
   return (
     <div className="flex min-h-screen w-full bg-background">
@@ -60,10 +60,10 @@ const SettingsLayoutContent = ({ children }: SettingsLayoutProps) => {
 
       {/* Settings Sidebar */}
       <aside className={cn(
-        "fixed left-0 top-0 z-30 h-screen border-r border-border bg-card transition-all duration-300 ease-in-out",
+        "fixed top-0 z-30 h-screen border-r border-border bg-card transition-all duration-300 ease-in-out",
         "w-64",
-        !isMobile && (collapsed ? "ml-16" : "ml-60"),
-        isMobile && "mt-16"
+        !isMobile && "left-16",
+        isMobile && "left-0 mt-16"
       )}>
         <div className="h-full overflow-y-auto p-6">
           <div className="mb-8">
@@ -105,7 +105,7 @@ const SettingsLayoutContent = ({ children }: SettingsLayoutProps) => {
       {/* Settings Content */}
       <main className={cn(
         "flex-1 transition-all duration-300 ease-in-out",
-        !isMobile && (collapsed ? "ml-80" : "ml-[34rem]"),
+        !isMobile && "ml-80",
         isMobile && "ml-64 mt-16"
       )}>
         <div className="p-8">
@@ -117,5 +117,9 @@ const SettingsLayoutContent = ({ children }: SettingsLayoutProps) => {
 };
 
 export const SettingsLayout = ({ children }: SettingsLayoutProps) => {
-  return <SettingsLayoutContent>{children}</SettingsLayoutContent>;
+  return (
+    <SidebarProvider>
+      <SettingsLayoutContent>{children}</SettingsLayoutContent>
+    </SidebarProvider>
+  );
 };

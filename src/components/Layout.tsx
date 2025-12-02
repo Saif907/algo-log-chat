@@ -10,7 +10,7 @@ interface LayoutProps {
 }
 
 const LayoutContent = ({ children }: LayoutProps) => {
-  const { collapsed, setCollapsed, isMobile, mobileOpen, setMobileOpen } = useSidebar();
+  const { isMobile, mobileOpen, setMobileOpen } = useSidebar();
 
   return (
     <div className="flex min-h-screen w-full bg-background">
@@ -46,7 +46,7 @@ const LayoutContent = ({ children }: LayoutProps) => {
       <main 
         className={cn(
           "flex-1 transition-all duration-300 ease-in-out min-h-screen",
-          !isMobile && (collapsed ? "ml-16" : "ml-60"),
+          !isMobile && "ml-16",
           isMobile && "mt-16"
         )}
       >
