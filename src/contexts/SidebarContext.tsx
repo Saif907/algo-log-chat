@@ -6,8 +6,6 @@ interface SidebarContextType {
   isMobile: boolean;
   mobileOpen: boolean;
   setMobileOpen: (open: boolean) => void;
-  isHovered: boolean;
-  setIsHovered: (hovered: boolean) => void;
 }
 
 const SidebarContext = createContext<SidebarContextType | undefined>(undefined);
@@ -21,10 +19,9 @@ export const useSidebar = () => {
 };
 
 export const SidebarProvider = ({ children }: { children: ReactNode }) => {
-  const [collapsed, setCollapsed] = useState(true);
+  const [collapsed, setCollapsed] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
-  const [isHovered, setIsHovered] = useState(false);
 
   useEffect(() => {
     const checkMobile = () => {
@@ -41,7 +38,7 @@ export const SidebarProvider = ({ children }: { children: ReactNode }) => {
 
   return (
     <SidebarContext.Provider
-      value={{ collapsed, setCollapsed, isMobile, mobileOpen, setMobileOpen, isHovered, setIsHovered }}
+      value={{ collapsed, setCollapsed, isMobile, mobileOpen, setMobileOpen }}
     >
       {children}
     </SidebarContext.Provider>

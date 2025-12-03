@@ -10,7 +10,7 @@ interface LayoutProps {
 }
 
 const LayoutContent = ({ children }: LayoutProps) => {
-  const { isMobile, mobileOpen, setMobileOpen } = useSidebar();
+  const { collapsed, isMobile, mobileOpen, setMobileOpen } = useSidebar();
 
   return (
     <div className="flex min-h-screen w-full bg-background">
@@ -26,7 +26,7 @@ const LayoutContent = ({ children }: LayoutProps) => {
 
       {/* Mobile Header */}
       {isMobile && (
-        <header className="fixed top-0 left-0 right-0 h-16 bg-card border-b border-border z-20 flex items-center px-4">
+        <header className="fixed top-0 left-0 right-0 h-14 bg-card border-b border-border z-20 flex items-center px-4">
           <Button
             variant="ghost"
             size="icon"
@@ -35,10 +35,10 @@ const LayoutContent = ({ children }: LayoutProps) => {
             <Menu className="h-5 w-5" />
           </Button>
           <div className="flex items-center gap-2 ml-3">
-            <div className="w-8 h-8 bg-gradient-to-br from-primary to-purple-600 rounded-lg flex items-center justify-center">
-              <span className="text-white font-bold text-sm">T</span>
+            <div className="w-7 h-7 bg-gradient-to-br from-primary to-purple-600 rounded-lg flex items-center justify-center">
+              <span className="text-white font-bold text-xs">T</span>
             </div>
-            <span className="font-semibold text-lg">TradeLM</span>
+            <span className="font-semibold">TradeLM</span>
           </div>
         </header>
       )}
@@ -46,8 +46,8 @@ const LayoutContent = ({ children }: LayoutProps) => {
       <main 
         className={cn(
           "flex-1 transition-all duration-300 ease-in-out min-h-screen",
-          !isMobile && "ml-16",
-          isMobile && "mt-16"
+          !isMobile && (collapsed ? "ml-16" : "ml-60"),
+          isMobile && "mt-14"
         )}
       >
         {children}

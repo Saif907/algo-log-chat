@@ -1,4 +1,4 @@
-import { Home, TrendingUp, Layers, BookOpen, Calendar, BarChart3, MessageSquare, X } from "lucide-react";
+import { Home, TrendingUp, Layers, BookOpen, Calendar, BarChart3, MessageSquare, X, ChevronLeft, ChevronRight } from "lucide-react";
 import { NavLink } from "./NavLink";
 import { cn } from "@/lib/utils";
 import { Button } from "./ui/button";
@@ -6,7 +6,7 @@ import { useSidebar } from "@/contexts/SidebarContext";
 import { UserProfileDropdown } from "./UserProfileDropdown";
 
 const mainNav = [
-  { title: "Home", icon: Home, url: "/" },
+  { title: "Home", icon: Home, url: "/dashboard" },
   { title: "Markets", icon: TrendingUp, url: "/markets" },
   { title: "Trades", icon: Layers, url: "/trades" },
   { title: "Strategies", icon: BookOpen, url: "/strategies" },
@@ -19,15 +19,12 @@ const toolsNav = [
 ];
 
 export const Sidebar = () => {
-  const { collapsed, isMobile, mobileOpen, setMobileOpen, isHovered, setIsHovered } = useSidebar();
+  const { collapsed, setCollapsed, isMobile, mobileOpen, setMobileOpen } = useSidebar();
 
-  // On desktop, show expanded when hovered over collapsed sidebar
-  const isExpanded = isMobile ? mobileOpen : (!collapsed || isHovered);
+  const isExpanded = isMobile ? mobileOpen : !collapsed;
 
   return (
     <aside
-      onMouseEnter={() => !isMobile && collapsed && setIsHovered(true)}
-      onMouseLeave={() => !isMobile && setIsHovered(false)}
       className={cn(
         "fixed left-0 top-0 z-40 h-screen bg-card border-r border-border transition-all duration-300 ease-in-out flex flex-col",
         isExpanded ? "w-60" : "w-16",
@@ -74,7 +71,7 @@ export const Sidebar = () => {
               <NavLink
                 key={item.url}
                 to={item.url}
-                end
+                end={item.url === "/dashboard"}
                 className={cn(
                   "flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors hover:bg-secondary",
                   !isExpanded && "justify-center"
@@ -114,6 +111,27 @@ export const Sidebar = () => {
           </nav>
         </div>
       </div>
+
+      {/* Collapse Toggle - Desktop Only */}
+      {!isMobile && (
+        <div className="px-3 py-2 border-t border-border">
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => setCollapsed(!collapsed)}
+            className={cn("w-full", !isExpanded && "justify-center px-0")}
+          >
+            {collapsed ? (
+              <ChevronRight className="h-4 w-4" />
+            ) : (
+              <>
+                <ChevronLeft className="h-4 w-4 mr-2" />
+                <span>Collapse</span>
+              </>
+            )}
+          </Button>
+        </div>
+      )}
 
       {/* User Section */}
       <div className="border-t border-border p-4">
