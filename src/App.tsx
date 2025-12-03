@@ -58,9 +58,9 @@ const App = () => (
           <Sonner />
           <BrowserRouter>
             <Routes>
-            {/* Public Routes */}
-            <Route path="/landing" element={<Landing />} />
-            <Route path="/auth" element={<Auth />} />
+{/* Landing Page - Default Route */}
+              <Route path="/" element={<Landing />} />
+              <Route path="/auth" element={<Auth />} />
             
             {/* Legal Pages (Public) */}
             <Route path="/legal/privacy" element={<Privacy />} />
@@ -76,7 +76,7 @@ const App = () => (
             <Route path="/legal/billing-policy" element={<BillingPolicy />} />
             
             {/* Protected Main App Routes */}
-              <Route path="/" element={<ProtectedRoute><Layout><Dashboard /></Layout></ProtectedRoute>} />
+              <Route path="/dashboard" element={<ProtectedRoute><Layout><Dashboard /></Layout></ProtectedRoute>} />
               <Route path="/markets" element={<ProtectedRoute><Layout><Markets /></Layout></ProtectedRoute>} />
               <Route path="/trades" element={<ProtectedRoute><Layout><Trades /></Layout></ProtectedRoute>} />
               <Route path="/trades/:id" element={<ProtectedRoute><Layout><TradeDetail /></Layout></ProtectedRoute>} />
