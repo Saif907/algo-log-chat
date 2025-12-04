@@ -8,7 +8,6 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
 import { Download, Plus, Filter, Search, Copy, Heart, Calendar, Clock, ChevronLeft, ChevronRight } from "lucide-react";
-import { ChatInput } from "@/components/ChatInput";
 import { AddTradeModal } from "@/components/trades/AddTradeModal";
 import { TradeCard } from "@/components/trades/TradeCard";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
@@ -303,10 +302,6 @@ export const Trades = () => {
         </div>
         </div>
       </div>
-      
-      <ChatInput 
-        placeholder="Ask about your trades or trade details..." 
-      />
 
       <AddTradeModal open={isAddTradeOpen} onOpenChange={setIsAddTradeOpen} />
     </div>

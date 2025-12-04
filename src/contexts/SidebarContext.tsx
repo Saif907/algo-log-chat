@@ -28,7 +28,7 @@ export const SidebarProvider = ({ children }: { children: ReactNode }) => {
   const toggleSidebar = () => setCollapsed(!collapsed);
 
   // Calculate sidebar width based on state
-  const sidebarWidth = isMobile ? 0 : (collapsed ? 64 : 240);
+  const sidebarWidth = isMobile ? 0 : (collapsed ? 70 : 256);
 
   useEffect(() => {
     const checkMobile = () => {
