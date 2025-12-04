@@ -1,5 +1,4 @@
 import { Card } from "@/components/ui/card";
-import { ChatInput } from "@/components/ChatInput";
 import { AreaChart, Area, BarChart, Bar, XAxis, YAxis, CartesianGrid, ResponsiveContainer, Cell } from "recharts";
 import { ArrowUpRight, ArrowDownRight } from "lucide-react";
 
@@ -262,8 +261,6 @@ export const Dashboard = () => {
           </div>
         </Card>
       </div>
-
-      <ChatInput placeholder="Ask anything about your trading performance..." />
     </div>
   );
 };

@@ -8,7 +8,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { ChatInput } from "@/components/ChatInput";
 import { Badge } from "@/components/ui/badge";
 import { DayHoverCard } from "@/components/calendar/DayHoverCard";
 import { DayDetailModal } from "@/components/calendar/DayDetailModal";
@@ -507,8 +506,6 @@ export const CalendarPage = () => {
           )}
         </SheetContent>
       </Sheet>
-
-      <ChatInput placeholder="Ask about your trading calendar..." />
     </div>
   );
 };
