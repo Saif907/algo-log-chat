@@ -1,4 +1,4 @@
-import { Home, TrendingUp, Layers, BookOpen, Calendar, BarChart3, MessageSquare, X, ChevronLeft, ChevronRight } from "lucide-react";
+import { Home, TrendingUp, Layers, BookOpen, Calendar, BarChart3, MessageSquare, X, PanelLeftClose, PanelLeft } from "lucide-react";
 import { NavLink } from "./NavLink";
 import { cn } from "@/lib/utils";
 import { Button } from "./ui/button";
@@ -19,7 +19,7 @@ const toolsNav = [
 ];
 
 export const Sidebar = () => {
-  const { collapsed, setCollapsed, isMobile, mobileOpen, setMobileOpen } = useSidebar();
+  const { collapsed, toggleSidebar, isMobile, mobileOpen, setMobileOpen } = useSidebar();
 
   const isExpanded = isMobile ? mobileOpen : !collapsed;
 
@@ -32,25 +32,45 @@ export const Sidebar = () => {
         isMobile && "z-50"
       )}
     >
-      {/* Header */}
-      <div className="h-16 flex items-center justify-between px-4 border-b border-border">
-        <div className={cn(
-          "flex items-center gap-2 transition-all duration-300",
-          !isExpanded && "justify-center w-full"
-        )}>
-          <div className="w-8 h-8 bg-gradient-to-br from-primary to-purple-600 rounded-lg flex items-center justify-center flex-shrink-0">
+      {/* Header with Toggle */}
+      <div className="h-16 flex items-center px-3 border-b border-border gap-2">
+        {/* Toggle Button - ChatGPT Style */}
+        {!isMobile && (
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={toggleSidebar}
+            className="h-9 w-9 flex-shrink-0"
+          >
+            {collapsed ? (
+              <PanelLeft className="h-5 w-5" />
+            ) : (
+              <PanelLeftClose className="h-5 w-5" />
+            )}
+          </Button>
+        )}
+        
+        {isExpanded && (
+          <div className="flex items-center gap-2 flex-1">
+            <div className="w-8 h-8 bg-gradient-to-br from-primary to-purple-600 rounded-lg flex items-center justify-center flex-shrink-0">
+              <span className="text-white font-bold text-sm">T</span>
+            </div>
+            <span className="font-semibold text-lg whitespace-nowrap">TradeLM</span>
+          </div>
+        )}
+        
+        {!isExpanded && !isMobile && (
+          <div className="w-8 h-8 bg-gradient-to-br from-primary to-purple-600 rounded-lg flex items-center justify-center mx-auto">
             <span className="text-white font-bold text-sm">T</span>
           </div>
-          {isExpanded && (
-            <span className="font-semibold text-lg whitespace-nowrap">TradeLM</span>
-          )}
-        </div>
+        )}
+        
         {isMobile && mobileOpen && (
           <Button
             variant="ghost"
             size="icon"
             onClick={() => setMobileOpen(false)}
-            className="h-8 w-8"
+            className="h-8 w-8 ml-auto"
           >
             <X className="h-4 w-4" />
           </Button>
@@ -111,27 +131,6 @@ export const Sidebar = () => {
           </nav>
         </div>
       </div>
-
-      {/* Collapse Toggle - Desktop Only */}
-      {!isMobile && (
-        <div className="px-3 py-2 border-t border-border">
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => setCollapsed(!collapsed)}
-            className={cn("w-full", !isExpanded && "justify-center px-0")}
-          >
-            {collapsed ? (
-              <ChevronRight className="h-4 w-4" />
-            ) : (
-              <>
-                <ChevronLeft className="h-4 w-4 mr-2" />
-                <span>Collapse</span>
-              </>
-            )}
-          </Button>
-        </div>
-      )}
 
       {/* User Section */}
       <div className="border-t border-border p-4">

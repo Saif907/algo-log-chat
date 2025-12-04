@@ -3,9 +3,11 @@ import { createContext, useContext, useState, useEffect, ReactNode } from "react
 interface SidebarContextType {
   collapsed: boolean;
   setCollapsed: (collapsed: boolean) => void;
+  toggleSidebar: () => void;
   isMobile: boolean;
   mobileOpen: boolean;
   setMobileOpen: (open: boolean) => void;
+  sidebarWidth: number;
 }
 
 const SidebarContext = createContext<SidebarContextType | undefined>(undefined);
@@ -23,6 +25,11 @@ export const SidebarProvider = ({ children }: { children: ReactNode }) => {
   const [mobileOpen, setMobileOpen] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
 
+  const toggleSidebar = () => setCollapsed(!collapsed);
+
+  // Calculate sidebar width based on state
+  const sidebarWidth = isMobile ? 0 : (collapsed ? 64 : 240);
+
   useEffect(() => {
     const checkMobile = () => {
       setIsMobile(window.innerWidth < 768);
@@ -38,7 +45,7 @@ export const SidebarProvider = ({ children }: { children: ReactNode }) => {
 
   return (
     <SidebarContext.Provider
-      value={{ collapsed, setCollapsed, isMobile, mobileOpen, setMobileOpen }}
+      value={{ collapsed, setCollapsed, toggleSidebar, isMobile, mobileOpen, setMobileOpen, sidebarWidth }}
     >
       {children}
     </SidebarContext.Provider>
