@@ -4,7 +4,6 @@ import { cn } from "@/lib/utils";
 import { SidebarProvider, useSidebar } from "@/contexts/SidebarContext";
 import { Menu } from "lucide-react";
 import { Button } from "./ui/button";
-import { TooltipProvider } from "./ui/tooltip";
 
 interface LayoutProps {
   children: ReactNode;
@@ -47,7 +46,7 @@ const LayoutContent = ({ children }: LayoutProps) => {
       <main 
         className={cn(
           "flex-1 transition-all duration-300 ease-in-out min-h-screen",
-          !isMobile && (collapsed ? "ml-[70px]" : "ml-64"),
+          !isMobile && (collapsed ? "ml-16" : "ml-60"),
           isMobile && "mt-14"
         )}
       >
@@ -60,9 +59,7 @@ const LayoutContent = ({ children }: LayoutProps) => {
 export const Layout = ({ children }: LayoutProps) => {
   return (
     <SidebarProvider>
-      <TooltipProvider>
-        <LayoutContent>{children}</LayoutContent>
-      </TooltipProvider>
+      <LayoutContent>{children}</LayoutContent>
     </SidebarProvider>
   );
 };

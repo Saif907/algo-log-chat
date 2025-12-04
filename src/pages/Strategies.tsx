@@ -9,6 +9,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Plus, MoreVertical, Trash2, Edit, TrendingUp } from "lucide-react";
+import { ChatInput } from "@/components/ChatInput";
 
 const mockStrategies = [
   {
@@ -322,6 +323,8 @@ export const Strategies = () => {
         </div>
         </div>
       </div>
+      
+      <ChatInput placeholder="Ask about your strategies or trading plans..." />
     </div>
   );
 };

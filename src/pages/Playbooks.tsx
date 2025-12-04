@@ -7,6 +7,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
 import { Plus, Lock, MoreVertical, Trash2 } from "lucide-react";
+import { ChatInput } from "@/components/ChatInput";
 
 const mockPlaybooks = [
   {
@@ -285,6 +286,8 @@ export const Playbooks = () => {
         </div>
         </div>
       </div>
+      
+      <ChatInput placeholder="Ask about your playbooks or trading strategies..." />
     </div>
   );
 };
