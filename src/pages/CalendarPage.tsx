@@ -14,84 +14,18 @@ import { DayHoverCard } from "@/components/calendar/DayHoverCard";
 import { DayDetailModal } from "@/components/calendar/DayDetailModal";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-
-// Mock data for demonstration
-const mockTradeData: Record<number, any> = {
-  18: { 
-    trades: 1, 
-    pnl: -700,
-    winRate: 0,
-    bestStrategy: "Breakout",
-    totalR: -2.5,
-    emotion: "Frustrated",
-    playbooks: [{ name: "Breakout", count: 1 }],
-    bestTrade: { symbol: "AAPL", pnl: 0 },
-    worstTrade: { symbol: "AAPL", pnl: -700 },
-    tradesList: [
-      { id: "1", symbol: "AAPL", direction: "Long", entry: 150, exit: 143, pnl: -700 }
-    ]
-  },
-  21: { 
-    trades: 1, 
-    pnl: 450,
-    winRate: 100,
-    bestStrategy: "Momentum",
-    totalR: 1.5,
-    emotion: "Confident",
-    playbooks: [{ name: "Momentum", count: 1 }],
-    bestTrade: { symbol: "TSLA", pnl: 450 },
-    worstTrade: { symbol: "TSLA", pnl: 450 },
-    tradesList: [
-      { id: "2", symbol: "TSLA", direction: "Long", entry: 200, exit: 215, pnl: 450 }
-    ]
-  },
-  22: { 
-    trades: 1, 
-    pnl: 0,
-    winRate: 0,
-    bestStrategy: "Range",
-    totalR: 0,
-    emotion: "Neutral",
-    playbooks: [{ name: "Range", count: 1 }],
-    bestTrade: { symbol: "MSFT", pnl: 0 },
-    worstTrade: { symbol: "MSFT", pnl: 0 },
-    tradesList: [
-      { id: "3", symbol: "MSFT", direction: "Short", entry: 300, exit: 300, pnl: 0 }
-    ]
-  },
-  23: { 
-    trades: 1, 
-    pnl: 0,
-    winRate: 0,
-    bestStrategy: "Scalp",
-    totalR: 0,
-    emotion: "Calm",
-    playbooks: [{ name: "Scalp", count: 1 }],
-    bestTrade: { symbol: "GOOGL", pnl: 0 },
-    worstTrade: { symbol: "GOOGL", pnl: 0 },
-    tradesList: [
-      { id: "4", symbol: "GOOGL", direction: "Long", entry: 140, exit: 140, pnl: 0 }
-    ]
-  },
-  24: { 
-    trades: 0, 
-    pnl: 0,
-    winRate: 0,
-    totalR: 0,
-    emotion: "N/A",
-    playbooks: [],
-    bestTrade: { symbol: "-", pnl: 0 },
-    worstTrade: { symbol: "-", pnl: 0 },
-    tradesList: []
-  },
-};
+import { useCalendar } from "@/hooks/use-calendar"; // Import the new hook
+import { Skeleton } from "@/components/ui/skeleton";
 
 export const CalendarPage = () => {
-  const [currentDate, setCurrentDate] = useState(new Date(2025, 10, 1)); // November 2025
+  const [currentDate, setCurrentDate] = useState(new Date());
   const [viewMode, setViewMode] = useState("P&L Heat");
   const [selectedDay, setSelectedDay] = useState<number | null>(null);
   const [modalOpen, setModalOpen] = useState(false);
   const [mobileSheetOpen, setMobileSheetOpen] = useState(false);
+
+  // Fetch Real Data
+  const { dailyStats, isLoading } = useCalendar(currentDate);
 
   const daysOfWeek = ["SUN", "MON", "TUE", "WED", "THU", "FRI", "SAT"];
   const daysOfWeekShort = ["S", "M", "T", "W", "T", "F", "S"];
@@ -136,21 +70,25 @@ export const CalendarPage = () => {
   };
 
   const getCellStyle = (day: number | null) => {
-    if (!day) return "";
-    const data = mockTradeData[day as keyof typeof mockTradeData];
+    if (!day || !dailyStats) return "";
+    const data = dailyStats[day];
     if (!data) return "";
     
-    if (data.pnl > 0) return "bg-success/20 border-success/30";
-    if (data.pnl < 0) return "bg-destructive/20 border-destructive/30";
-    return "";
+    if (data.pnl > 0) return "bg-success/20 border-success/30 hover:bg-success/30";
+    if (data.pnl < 0) return "bg-destructive/20 border-destructive/30 hover:bg-destructive/30";
+    return "hover:bg-muted/50";
   };
 
   const isToday = (day: number | null) => {
-    return day === 24;
+    if (!day) return false;
+    const today = new Date();
+    return day === today.getDate() && 
+           currentDate.getMonth() === today.getMonth() && 
+           currentDate.getFullYear() === today.getFullYear();
   };
 
   const handleDayClick = (day: number | null, isMobileView: boolean) => {
-    if (day && mockTradeData[day]) {
+    if (day && dailyStats && dailyStats[day]) {
       setSelectedDay(day);
       if (isMobileView) {
         setMobileSheetOpen(true);
@@ -161,8 +99,8 @@ export const CalendarPage = () => {
   };
 
   const getSelectedDayData = () => {
-    if (!selectedDay) return null;
-    return mockTradeData[selectedDay];
+    if (!selectedDay || !dailyStats) return undefined;
+    return dailyStats[selectedDay];
   };
 
   const getSelectedDate = () => {
@@ -184,23 +122,13 @@ export const CalendarPage = () => {
         {/* Controls - Mobile */}
         <div className="flex md:hidden flex-col gap-3 mb-4">
           <div className="flex items-center justify-between">
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={goToPreviousMonth}
-              className="h-8 w-8"
-            >
+            <Button variant="ghost" size="icon" onClick={goToPreviousMonth} className="h-8 w-8">
               <ChevronLeft className="h-4 w-4" />
             </Button>
             <span className="text-base font-semibold">
               {formatMonthYearShort(currentDate)}
             </span>
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={goToNextMonth}
-              className="h-8 w-8"
-            >
+            <Button variant="ghost" size="icon" onClick={goToNextMonth} className="h-8 w-8">
               <ChevronRight className="h-4 w-4" />
             </Button>
           </div>
@@ -215,7 +143,6 @@ export const CalendarPage = () => {
               <SelectContent>
                 <SelectItem value="P&L Heat">P&L Heat</SelectItem>
                 <SelectItem value="Win Rate">Win Rate</SelectItem>
-                <SelectItem value="Volume">Volume</SelectItem>
               </SelectContent>
             </Select>
             <Button variant="ghost" size="icon" className="h-8 w-8 flex-shrink-0">
@@ -227,31 +154,19 @@ export const CalendarPage = () => {
         {/* Controls - Desktop */}
         <div className="hidden md:flex items-center justify-between mb-6">
           <div className="flex items-center gap-3">
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={goToPreviousMonth}
-              className="h-9 w-9"
-            >
+            <Button variant="ghost" size="icon" onClick={goToPreviousMonth} className="h-9 w-9">
               <ChevronLeft className="h-4 w-4" />
             </Button>
             <span className="text-lg font-semibold min-w-[180px] text-center">
               {formatMonthYear(currentDate)}
             </span>
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={goToNextMonth}
-              className="h-9 w-9"
-            >
+            <Button variant="ghost" size="icon" onClick={goToNextMonth} className="h-9 w-9">
               <ChevronRight className="h-4 w-4" />
             </Button>
           </div>
 
           <div className="flex items-center gap-3">
-            <Button variant="outline" onClick={goToToday}>
-              Today
-            </Button>
+            <Button variant="outline" onClick={goToToday}>Today</Button>
             <Select value={viewMode} onValueChange={setViewMode}>
               <SelectTrigger className="w-[140px]">
                 <SelectValue />
@@ -259,153 +174,127 @@ export const CalendarPage = () => {
               <SelectContent>
                 <SelectItem value="P&L Heat">P&L Heat</SelectItem>
                 <SelectItem value="Win Rate">Win Rate</SelectItem>
-                <SelectItem value="Volume">Volume</SelectItem>
               </SelectContent>
             </Select>
-            <Button variant="ghost" size="icon">
-              <Filter className="h-4 w-4" />
-            </Button>
-            <Button variant="ghost" size="icon">
-              <Download className="h-4 w-4" />
-            </Button>
+            <Button variant="ghost" size="icon"><Filter className="h-4 w-4" /></Button>
+            <Button variant="ghost" size="icon"><Download className="h-4 w-4" /></Button>
           </div>
         </div>
 
-        {/* Calendar Grid - Mobile */}
-        <div className="md:hidden bg-card rounded-lg border border-border overflow-hidden">
-          {/* Day headers - Mobile */}
-          <div className="grid grid-cols-7 border-b border-border">
-            {daysOfWeekShort.map((day, i) => (
-              <div
-                key={i}
-                className="p-2 text-center text-xs font-medium text-muted-foreground"
-              >
-                {day}
-              </div>
-            ))}
+        {/* Loading State */}
+        {isLoading && (
+          <div className="grid grid-cols-7 gap-1 h-[600px]">
+             {Array.from({length: 35}).map((_, i) => (
+                 <Skeleton key={i} className="h-full w-full rounded-md" />
+             ))}
           </div>
+        )}
 
-          {/* Calendar days - Mobile */}
-          <div className="grid grid-cols-7">
-            {calendarDays.map((day, index) => {
-              const dayData = day ? mockTradeData[day] : null;
-              const hasTrades = dayData && dayData.trades > 0;
+        {/* Calendar Grid - Desktop & Mobile (Content Switch handled by CSS previously, keeping logic) */}
+        {!isLoading && (
+          <>
+             {/* Mobile View */}
+            <div className="md:hidden bg-card rounded-lg border border-border overflow-hidden">
+              <div className="grid grid-cols-7 border-b border-border">
+                {daysOfWeekShort.map((day, i) => (
+                  <div key={i} className="p-2 text-center text-xs font-medium text-muted-foreground">{day}</div>
+                ))}
+              </div>
+              <div className="grid grid-cols-7">
+                {calendarDays.map((day, index) => {
+                  const dayData = day && dailyStats ? dailyStats[day] : null;
+                  const hasTrades = dayData && dayData.trades > 0;
+                  return (
+                    <div
+                      key={index}
+                      onClick={() => handleDayClick(day, true)}
+                      className={`min-h-[48px] sm:min-h-[56px] border-r border-b border-border p-1 sm:p-1.5 relative transition-all duration-200 ${
+                        day ? getCellStyle(day) : ""
+                      } ${!day ? "bg-muted/30" : ""} ${
+                        hasTrades ? "cursor-pointer active:scale-95" : ""
+                      }`}
+                    >
+                      {day && (
+                        <>
+                          <div className="flex items-start justify-between">
+                            <span className={`text-xs font-medium ${isToday(day) ? "bg-foreground text-background rounded-full w-5 h-5 flex items-center justify-center" : ""}`}>
+                              {day}
+                            </span>
+                            {dayData && dayData.trades > 0 && (
+                              <Badge variant="secondary" className="h-4 w-4 p-0 flex items-center justify-center rounded-full text-[10px]">
+                                {dayData.trades}
+                              </Badge>
+                            )}
+                          </div>
+                          {dayData && dayData.pnl !== 0 && (
+                            <div className={`text-[10px] sm:text-xs font-semibold mt-0.5 ${dayData.pnl > 0 ? "text-success" : "text-destructive"}`}>
+                              {dayData.pnl > 0 ? "+" : ""}{Math.abs(dayData.pnl) >= 1000 ? `${(dayData.pnl / 1000).toFixed(1)}k` : dayData.pnl.toFixed(0)}
+                            </div>
+                          )}
+                        </>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
 
-              return (
-                <div
-                  key={index}
-                  onClick={() => handleDayClick(day, true)}
-                  className={`min-h-[48px] sm:min-h-[56px] border-r border-b border-border p-1 sm:p-1.5 relative transition-all duration-200 ${
-                    day ? getCellStyle(day) : ""
-                  } ${!day ? "bg-muted/30" : ""} ${
-                    hasTrades ? "cursor-pointer active:scale-95" : ""
-                  }`}
-                >
-                  {day && (
-                    <>
-                      <div className="flex items-start justify-between">
-                        <span className={`text-xs font-medium ${isToday(day) ? "bg-foreground text-background rounded-full w-5 h-5 flex items-center justify-center" : ""}`}>
-                          {day}
-                        </span>
-                        {dayData?.trades > 0 && (
-                          <Badge
-                            variant="secondary"
-                            className="h-4 w-4 p-0 flex items-center justify-center rounded-full text-[10px]"
-                          >
-                            {dayData.trades}
-                          </Badge>
+             {/* Desktop View */}
+            <div className="hidden md:block bg-card rounded-lg border border-border overflow-hidden">
+              <div className="grid grid-cols-7 border-b border-border">
+                {daysOfWeek.map((day) => (
+                  <div key={day} className="p-4 text-center text-sm font-medium text-muted-foreground">{day}</div>
+                ))}
+              </div>
+              <div className="grid grid-cols-7">
+                {calendarDays.map((day, index) => {
+                  const dayData = day && dailyStats ? dailyStats[day] : null;
+                  const hasTrades = dayData && dayData.trades > 0;
+
+                  return (
+                    <DayHoverCard
+                      key={index}
+                      day={day || 0}
+                      data={dayData || { trades: 0, pnl: 0 }}
+                    >
+                      <div
+                        onClick={() => handleDayClick(day, false)}
+                        className={`min-h-[120px] border-r border-b border-border p-3 relative transition-all duration-200 ${
+                          day ? getCellStyle(day) : ""
+                        } ${!day ? "bg-muted/30" : ""} ${
+                          hasTrades ? "cursor-pointer hover:scale-[1.02] hover:shadow-lg hover:z-10" : ""
+                        }`}
+                      >
+                        {day && (
+                          <>
+                            <div className="flex items-start justify-between mb-2">
+                              <span className="text-sm font-medium">{day}</span>
+                              {dayData && dayData.trades > 0 && (
+                                <Badge variant="secondary" className="h-5 w-5 p-0 flex items-center justify-center rounded-full text-xs">
+                                  {dayData.trades}
+                                </Badge>
+                              )}
+                            </div>
+                            {dayData && dayData.pnl !== 0 && (
+                              <div className={`text-sm font-semibold ${dayData.pnl > 0 ? "text-success" : "text-destructive"}`}>
+                                {dayData.pnl > 0 ? "+" : ""}{dayData.pnl.toFixed(2)}
+                              </div>
+                            )}
+                            {isToday(day) && (
+                              <div className="absolute bottom-2 left-1/2 -translate-x-1/2">
+                                <div className="h-2 w-2 rounded-full bg-foreground" />
+                              </div>
+                            )}
+                          </>
                         )}
                       </div>
-                      {dayData && dayData.pnl !== 0 && (
-                        <div
-                          className={`text-[10px] sm:text-xs font-semibold mt-0.5 ${
-                            dayData.pnl > 0 ? "text-success" : "text-destructive"
-                          }`}
-                        >
-                          ${dayData.pnl > 0 ? "+" : ""}
-                          {Math.abs(dayData.pnl) >= 1000 
-                            ? `${(dayData.pnl / 1000).toFixed(1)}k` 
-                            : dayData.pnl}
-                        </div>
-                      )}
-                    </>
-                  )}
-                </div>
-              );
-            })}
-          </div>
-        </div>
-
-        {/* Calendar Grid - Desktop */}
-        <div className="hidden md:block bg-card rounded-lg border border-border overflow-hidden">
-          {/* Day headers */}
-          <div className="grid grid-cols-7 border-b border-border">
-            {daysOfWeek.map((day) => (
-              <div
-                key={day}
-                className="p-4 text-center text-sm font-medium text-muted-foreground"
-              >
-                {day}
+                    </DayHoverCard>
+                  );
+                })}
               </div>
-            ))}
-          </div>
-
-          {/* Calendar days */}
-          <div className="grid grid-cols-7">
-            {calendarDays.map((day, index) => {
-              const dayData = day ? mockTradeData[day] : null;
-              const hasTrades = dayData && dayData.trades > 0;
-
-              return (
-                <DayHoverCard
-                  key={index}
-                  day={day || 0}
-                  data={dayData || { trades: 0, pnl: 0 }}
-                >
-                  <div
-                    onClick={() => handleDayClick(day, false)}
-                    className={`min-h-[120px] border-r border-b border-border p-3 relative transition-all duration-200 ${
-                      day ? getCellStyle(day) : ""
-                    } ${!day ? "bg-muted/30" : ""} ${
-                      hasTrades ? "cursor-pointer hover:scale-[1.02] hover:shadow-lg hover:z-10" : ""
-                    }`}
-                  >
-                    {day && (
-                      <>
-                        <div className="flex items-start justify-between mb-2">
-                          <span className="text-sm font-medium">{day}</span>
-                          {dayData?.trades > 0 && (
-                            <Badge
-                              variant="secondary"
-                              className="h-5 w-5 p-0 flex items-center justify-center rounded-full text-xs"
-                            >
-                              {dayData.trades}
-                            </Badge>
-                          )}
-                        </div>
-                        {dayData && dayData.pnl !== 0 && (
-                          <div
-                            className={`text-sm font-semibold ${
-                              dayData.pnl > 0 ? "text-success" : "text-destructive"
-                            }`}
-                          >
-                            ${dayData.pnl > 0 ? "+" : ""}
-                            {dayData.pnl.toFixed(2)}
-                          </div>
-                        )}
-                        {isToday(day) && (
-                          <div className="absolute bottom-2 left-1/2 -translate-x-1/2">
-                            <div className="h-2 w-2 rounded-full bg-foreground" />
-                          </div>
-                        )}
-                      </>
-                    )}
-                  </div>
-                </DayHoverCard>
-              );
-            })}
-          </div>
-        </div>
+            </div>
+          </>
+        )}
 
         {/* Legend */}
         <div className="flex items-center justify-center sm:justify-end gap-4 sm:gap-6 mt-4">
@@ -425,7 +314,7 @@ export const CalendarPage = () => {
         open={modalOpen}
         onOpenChange={setModalOpen}
         date={getSelectedDate()}
-        data={getSelectedDayData()}
+        data={selectedData}
       />
 
       {/* Mobile Sheet */}
@@ -433,11 +322,7 @@ export const CalendarPage = () => {
         <SheetContent side="bottom" className="h-[85vh] rounded-t-2xl">
           <SheetHeader className="pb-4 border-b border-border">
             <SheetTitle className="text-left">
-              {getSelectedDate()?.toLocaleDateString("en-US", { 
-                weekday: "long", 
-                month: "long", 
-                day: "numeric" 
-              })}
+              {getSelectedDate()?.toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric" })}
             </SheetTitle>
           </SheetHeader>
           
@@ -454,7 +339,7 @@ export const CalendarPage = () => {
                   <div className="bg-muted/50 rounded-lg p-3">
                     <p className="text-xs text-muted-foreground">Total P&L</p>
                     <p className={`text-lg font-bold ${selectedData.pnl >= 0 ? "text-success" : "text-destructive"}`}>
-                      ${selectedData.pnl >= 0 ? "+" : ""}{selectedData.pnl}
+                      ${selectedData.pnl >= 0 ? "+" : ""}{selectedData.pnl.toFixed(2)}
                     </p>
                   </div>
                   <div className="bg-muted/50 rounded-lg p-3">
@@ -474,14 +359,14 @@ export const CalendarPage = () => {
               
               <TabsContent value="trades" className="mt-4">
                 <div className="space-y-2">
-                  {selectedData.tradesList.map((trade: any) => (
+                  {selectedData.tradesList.map((trade) => (
                     <div key={trade.id} className="flex items-center justify-between p-3 bg-muted/50 rounded-lg">
                       <div>
                         <p className="font-medium">{trade.symbol}</p>
                         <p className="text-xs text-muted-foreground">{trade.direction}</p>
                       </div>
                       <p className={`font-semibold ${trade.pnl >= 0 ? "text-success" : "text-destructive"}`}>
-                        ${trade.pnl >= 0 ? "+" : ""}{trade.pnl}
+                        ${trade.pnl >= 0 ? "+" : ""}{trade.pnl.toFixed(2)}
                       </p>
                     </div>
                   ))}
@@ -499,7 +384,10 @@ export const CalendarPage = () => {
                   </div>
                   <div className="p-3 bg-muted/50 rounded-lg">
                     <p className="text-xs text-muted-foreground mb-1">AI Insight</p>
-                    <p className="text-sm">Your emotional state was {selectedData.emotion?.toLowerCase()}. Consider reviewing your risk management for similar market conditions.</p>
+                    <p className="text-sm">
+                        {selectedData.pnl > 0 ? "Great execution day!" : "Review your risk management."} 
+                        {selectedData.emotion !== "Neutral" && ` You traded with ${selectedData.emotion} emotion.`}
+                    </p>
                   </div>
                 </div>
               </TabsContent>

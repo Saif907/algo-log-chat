@@ -1,21 +1,20 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Card } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
-import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
-import { Upload, X, ChevronDown, Plus } from "lucide-react";
+import { Loader2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { supabase } from "@/integrations/supabase/client";
+import { useQueryClient } from "@tanstack/react-query";
 
 interface EditTradeModalProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   trade?: {
-    id: number;
+    id: string;
     symbol: string;
     side: string;
     entryPrice: number;
@@ -23,75 +22,124 @@ interface EditTradeModalProps {
     quantity: number;
     entryDate: string;
     exitDate: string;
+    notes?: string;
     stopLoss?: number;
     target?: number;
-    strategy?: string;
-    emotionalState?: string;
-    notes?: string;
-    tags?: string[];
+    strategyId?: string;
+    emotion?: string;
   };
 }
 
 export const EditTradeModal = ({ open, onOpenChange, trade }: EditTradeModalProps) => {
   const { toast } = useToast();
-  const [screenshots, setScreenshots] = useState<File[]>([]);
-  const [isOptionalOpen, setIsOptionalOpen] = useState(true);
-  const [tags, setTags] = useState<string[]>(trade?.tags || []);
-  const [newTag, setNewTag] = useState("");
+  const queryClient = useQueryClient();
+  const [loading, setLoading] = useState(false);
+  const [strategies, setStrategies] = useState<any[]>([]);
 
-  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files) {
-      setScreenshots([...screenshots, ...Array.from(e.target.files)]);
+  useEffect(() => {
+    if (open) {
+      const fetchStrategies = async () => {
+        const { data } = await supabase.from('strategies').select('id, name');
+        if (data) setStrategies(data);
+      };
+      fetchStrategies();
     }
+  }, [open]);
+
+  const toDateTimeLocal = (dateStr?: string) => {
+    if (!dateStr || dateStr === "-") return "";
+    const date = new Date(dateStr);
+    if (isNaN(date.getTime())) return ""; 
+    const offset = date.getTimezoneOffset() * 60000;
+    return (new Date(date.getTime() - offset)).toISOString().slice(0, 16);
   };
 
-  const removeScreenshot = (index: number) => {
-    setScreenshots(screenshots.filter((_, i) => i !== index));
-  };
-
-  const addTag = () => {
-    if (newTag.trim() && !tags.includes(newTag.trim())) {
-      setTags([...tags, newTag.trim()]);
-      setNewTag("");
-    }
-  };
-
-  const removeTag = (tagToRemove: string) => {
-    setTags(tags.filter(tag => tag !== tagToRemove));
-  };
-
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    toast({
-      title: "Trade updated successfully",
-      description: "Your changes have been saved.",
-    });
-    onOpenChange(false);
+    if (!trade) return;
+    setLoading(true);
+
+    const formData = new FormData(e.target as HTMLFormElement);
+    const entryDate = formData.get("entry-date") as string;
+    const exitDate = formData.get("exit-date") as string;
+    
+    const entryPrice = parseFloat(formData.get("entry-price") as string);
+    const exitPrice = parseFloat(formData.get("exit-price") as string);
+    const quantity = parseFloat(formData.get("quantity") as string);
+    const stopLoss = parseFloat(formData.get("stop-loss") as string) || null;
+    const target = parseFloat(formData.get("target") as string) || null;
+    
+    const direction = formData.get("side") as string;
+    // Enum fix: Ensure UPPERCASE
+    const directionFormatted = direction ? direction.toUpperCase() : "LONG";
+
+    let pnl = null;
+    if (!isNaN(entryPrice) && !isNaN(exitPrice) && !isNaN(quantity)) {
+        if (directionFormatted === "LONG") {
+            pnl = (exitPrice - entryPrice) * quantity;
+        } else {
+            pnl = (entryPrice - exitPrice) * quantity;
+        }
+    }
+
+    // UUID Fix: Ensure empty string maps to null
+    const rawStrategyId = formData.get("strategy") as string;
+    const strategyId = (rawStrategyId && rawStrategyId !== "none" && rawStrategyId !== "") ? rawStrategyId : null;
+
+    try {
+        const tradeData = {
+            symbol: (formData.get("symbol") as string).toUpperCase(),
+            direction: directionFormatted,
+            entry_price: entryPrice,
+            exit_price: exitPrice,
+            quantity: quantity,
+            pnl: pnl,
+            stop_loss: stopLoss,
+            target: target,
+            entry_time: new Date(entryDate).toISOString(),
+            exit_time: exitDate ? new Date(exitDate).toISOString() : null,
+            encrypted_notes: formData.get("notes") as string,
+            strategy_id: strategyId,
+            emotion: formData.get("emotional-state") as string,
+        };
+
+        const { error } = await supabase
+            .from('trades')
+            .update(tradeData)
+            .eq('id', trade.id);
+
+        if (error) throw error;
+
+        toast({ title: "Success", description: "Trade updated successfully" });
+        queryClient.invalidateQueries({ queryKey: ['trades'] });
+        onOpenChange(false);
+    } catch (error: any) {
+        toast({ title: "Error", description: error.message, variant: "destructive" });
+    } finally {
+        setLoading(false);
+    }
   };
+
+  const defaultEntryDate = toDateTimeLocal(trade?.entryDate);
+  const defaultExitDate = toDateTimeLocal(trade?.exitDate);
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-[95vw] w-full sm:max-w-[600px] md:max-w-[800px] max-h-[90vh] overflow-y-auto">
+      <DialogContent className="max-w-[600px] max-h-[90vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle className="text-2xl font-bold">Edit Trade</DialogTitle>
+          <DialogTitle>Edit Trade</DialogTitle>
         </DialogHeader>
-
-        <form onSubmit={handleSubmit} className="space-y-6">
-          {/* Required Fields */}
-          <div className="space-y-4">
-            <h3 className="text-sm font-semibold text-muted-foreground uppercase">Required Information</h3>
-            
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <form onSubmit={handleSubmit} className="space-y-4">
+            <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
-                <Label htmlFor="symbol">Symbol *</Label>
-                <Input id="symbol" placeholder="e.g., TSLA, BANKNIFTY" defaultValue={trade?.symbol} required />
+                <Label>Symbol</Label>
+                <Input name="symbol" defaultValue={trade?.symbol} required />
               </div>
-
               <div className="space-y-2">
-                <Label htmlFor="side">Side *</Label>
-                <Select defaultValue={trade?.side} required>
-                  <SelectTrigger id="side">
-                    <SelectValue placeholder="Select side" />
+                <Label>Side</Label>
+                <Select name="side" defaultValue={trade?.side?.toLowerCase() || 'long'}>
+                  <SelectTrigger>
+                    <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="long">Long</SelectItem>
@@ -99,196 +147,74 @@ export const EditTradeModal = ({ open, onOpenChange, trade }: EditTradeModalProp
                   </SelectContent>
                 </Select>
               </div>
-
               <div className="space-y-2">
-                <Label htmlFor="entry-price">Entry Price *</Label>
-                <Input id="entry-price" type="number" step="0.01" defaultValue={trade?.entryPrice} required />
+                <Label>Entry Price</Label>
+                <Input name="entry-price" type="number" step="0.0001" defaultValue={trade?.entryPrice} required />
               </div>
-
               <div className="space-y-2">
-                <Label htmlFor="exit-price">Exit Price *</Label>
-                <Input id="exit-price" type="number" step="0.01" defaultValue={trade?.exitPrice} required />
+                <Label>Exit Price</Label>
+                <Input name="exit-price" type="number" step="0.0001" defaultValue={trade?.exitPrice} />
               </div>
-
               <div className="space-y-2">
-                <Label htmlFor="quantity">Quantity *</Label>
-                <Input id="quantity" type="number" defaultValue={trade?.quantity} required />
+                <Label>Quantity</Label>
+                <Input name="quantity" type="number" defaultValue={trade?.quantity} required />
               </div>
-
               <div className="space-y-2">
-                <Label htmlFor="entry-date">Entry Date & Time *</Label>
-                <Input id="entry-date" type="datetime-local" defaultValue={trade?.entryDate} required />
+                <Label>Entry Time</Label>
+                <Input name="entry-date" type="datetime-local" defaultValue={defaultEntryDate} required />
               </div>
-
-              <div className="space-y-2 sm:col-span-2">
-                <Label htmlFor="exit-date">Exit Date & Time *</Label>
-                <Input id="exit-date" type="datetime-local" defaultValue={trade?.exitDate} required />
+              <div className="space-y-2">
+                <Label>Exit Time</Label>
+                <Input name="exit-date" type="datetime-local" defaultValue={defaultExitDate} />
               </div>
-            </div>
-          </div>
-
-          {/* Tags Management */}
-          <div className="space-y-3">
-            <Label>Tags</Label>
-            <div className="flex gap-2">
-              <Input 
-                placeholder="Add a tag..." 
-                value={newTag}
-                onChange={(e) => setNewTag(e.target.value)}
-                onKeyPress={(e) => e.key === 'Enter' && (e.preventDefault(), addTag())}
-              />
-              <Button type="button" onClick={addTag} size="icon" variant="outline">
-                <Plus className="h-4 w-4" />
-              </Button>
-            </div>
-            {tags.length > 0 && (
-              <div className="flex flex-wrap gap-2">
-                {tags.map((tag, index) => (
-                  <Badge key={index} variant="secondary" className="gap-1">
-                    {tag}
-                    <X 
-                      className="h-3 w-3 cursor-pointer hover:text-destructive" 
-                      onClick={() => removeTag(tag)}
-                    />
-                  </Badge>
-                ))}
+              <div className="space-y-2">
+                  <Label>Stop Loss</Label>
+                  <Input name="stop-loss" type="number" step="0.0001" defaultValue={trade?.stopLoss} />
               </div>
-            )}
-          </div>
-
-          {/* Optional Fields - Collapsible */}
-          <Collapsible open={isOptionalOpen} onOpenChange={setIsOptionalOpen}>
-            <CollapsibleTrigger asChild>
-              <Button 
-                type="button" 
-                variant="outline" 
-                className="w-full flex items-center justify-between"
-              >
-                <span>Optional Details</span>
-                <ChevronDown className={`h-4 w-4 transition-transform ${isOptionalOpen ? 'rotate-180' : ''}`} />
-              </Button>
-            </CollapsibleTrigger>
-            
-            <CollapsibleContent className="space-y-4 mt-4">
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label htmlFor="stop-loss">Stop Loss</Label>
-                  <Input id="stop-loss" type="number" step="0.01" defaultValue={trade?.stopLoss} />
-                </div>
-
-                <div className="space-y-2">
-                  <Label htmlFor="target">Target</Label>
-                  <Input id="target" type="number" step="0.01" defaultValue={trade?.target} />
-                </div>
-
-                <div className="space-y-2">
-                  <Label htmlFor="strategy">Strategy / Playbook</Label>
-                  <Select defaultValue={trade?.strategy}>
-                    <SelectTrigger id="strategy">
-                      <SelectValue placeholder="Select playbook" />
+              <div className="space-y-2">
+                  <Label>Target</Label>
+                  <Input name="target" type="number" step="0.0001" defaultValue={trade?.target} />
+              </div>
+              <div className="space-y-2">
+                  <Label>Strategy</Label>
+                  <Select name="strategy" defaultValue={trade?.strategyId || "none"}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select Strategy" />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="orb">ORB Breakout</SelectItem>
-                      <SelectItem value="pullback">Pullback Entry</SelectItem>
-                      <SelectItem value="momentum">Momentum Trade</SelectItem>
-                      <SelectItem value="reversal">Reversal</SelectItem>
-                      <SelectItem value="none">No Playbook</SelectItem>
+                      <SelectItem value="none">No Strategy</SelectItem>
+                      {strategies.map(s => (
+                        <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>
+                      ))}
                     </SelectContent>
                   </Select>
-                </div>
-
-                <div className="space-y-2">
-                  <Label htmlFor="emotional-state">Emotional State</Label>
-                  <Select defaultValue={trade?.emotionalState}>
-                    <SelectTrigger id="emotional-state">
-                      <SelectValue placeholder="How did you feel?" />
+              </div>
+              <div className="space-y-2">
+                  <Label>Emotion</Label>
+                  <Select name="emotional-state" defaultValue={trade?.emotion}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select Emotion" />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="confident">Confident</SelectItem>
-                      <SelectItem value="neutral">Neutral</SelectItem>
-                      <SelectItem value="anxious">Anxious</SelectItem>
-                      <SelectItem value="fearful">Fearful</SelectItem>
-                      <SelectItem value="greedy">Greedy</SelectItem>
-                      <SelectItem value="fomo">FOMO</SelectItem>
+                      <SelectItem value="Confident">Confident</SelectItem>
+                      <SelectItem value="Fearful">Fearful</SelectItem>
+                      <SelectItem value="Neutral">Neutral</SelectItem>
+                      <SelectItem value="Greedy">Greedy</SelectItem>
                     </SelectContent>
                   </Select>
-                </div>
               </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="notes">Notes</Label>
-                <Textarea
-                  id="notes"
-                  placeholder="What was your thesis? What did you observe?"
-                  defaultValue={trade?.notes}
-                  className="min-h-[100px]"
-                />
-              </div>
-
-              <div className="space-y-2">
-                <Label>Chart Image Upload</Label>
-                <Card className="border-2 border-dashed border-border hover:border-primary/50 transition-colors">
-                  <label htmlFor="file-upload" className="cursor-pointer block p-6">
-                    <div className="flex flex-col items-center justify-center gap-2">
-                      <Upload className="h-8 w-8 text-muted-foreground" />
-                      <p className="text-sm text-muted-foreground">
-                        Click to upload chart screenshot
-                      </p>
-                      <p className="text-xs text-muted-foreground">
-                        PNG, JPG up to 10MB
-                      </p>
-                    </div>
-                    <input
-                      id="file-upload"
-                      type="file"
-                      multiple
-                      accept="image/*"
-                      className="hidden"
-                      onChange={handleFileUpload}
-                    />
-                  </label>
-                </Card>
-
-                {screenshots.length > 0 && (
-                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 mt-4">
-                    {screenshots.map((file, index) => (
-                      <Card key={index} className="relative p-2 group">
-                        <div className="aspect-video bg-muted rounded flex items-center justify-center text-xs text-muted-foreground">
-                          {file.name}
-                        </div>
-                        <Button
-                          type="button"
-                          variant="destructive"
-                          size="icon"
-                          className="absolute -top-2 -right-2 h-6 w-6 opacity-0 group-hover:opacity-100 transition-opacity"
-                          onClick={() => removeScreenshot(index)}
-                        >
-                          <X className="h-3 w-3" />
-                        </Button>
-                      </Card>
-                    ))}
-                  </div>
-                )}
-              </div>
-            </CollapsibleContent>
-          </Collapsible>
-
-          <div className="flex flex-col sm:flex-row gap-3 justify-end pt-4 border-t border-border">
-            <Button
-              type="button"
-              variant="outline"
-              onClick={() => onOpenChange(false)}
-              className="w-full sm:w-auto"
-            >
-              Cancel
-            </Button>
-            <Button
-              type="submit"
-              className="w-full sm:w-auto"
-            >
-              Update Trade
-            </Button>
-          </div>
+            </div>
+            <div className="space-y-2">
+                <Label>Notes</Label>
+                <Textarea name="notes" defaultValue={trade?.notes} />
+            </div>
+            <div className="flex justify-end gap-2 pt-4">
+                <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
+                <Button type="submit" disabled={loading}>
+                   {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                   Update
+                </Button>
+            </div>
         </form>
       </DialogContent>
     </Dialog>

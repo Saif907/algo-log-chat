@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { Home, TrendingUp, Layers, BookOpen, Calendar, BarChart3, MessageSquare, X, PanelLeftClose, PanelLeft } from "lucide-react";
 import { NavLink } from "./NavLink";
 import { cn } from "@/lib/utils";
@@ -20,6 +21,7 @@ const toolsNav = [
 
 export const Sidebar = () => {
   const { collapsed, toggleSidebar, isMobile, mobileOpen, setMobileOpen } = useSidebar();
+  const [sidebarHovered, setSidebarHovered] = useState(false);
 
   const isExpanded = isMobile ? mobileOpen : !collapsed;
 
@@ -29,51 +31,70 @@ export const Sidebar = () => {
         "fixed left-0 top-0 z-40 h-screen bg-card border-r border-border transition-all duration-300 ease-in-out flex flex-col",
         isExpanded ? "w-60" : "w-16",
         isMobile && !mobileOpen && "-translate-x-full",
-        isMobile && "z-50"
+        isMobile && "z-50",
+        !isExpanded && !isMobile && "cursor-pointer"
       )}
+      onMouseEnter={() => !isExpanded && !isMobile && setSidebarHovered(true)}
+      onMouseLeave={() => setSidebarHovered(false)}
+      onClick={() => {
+        if (!isExpanded && !isMobile) {
+          toggleSidebar();
+        }
+      }}
     >
-      {/* Header with Toggle */}
-      <div className="h-16 flex items-center px-3 border-b border-border gap-2">
-        {/* Toggle Button - ChatGPT Style */}
-        {!isMobile && (
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={toggleSidebar}
-            className="h-9 w-9 flex-shrink-0"
-          >
-            {collapsed ? (
-              <PanelLeft className="h-5 w-5" />
-            ) : (
-              <PanelLeftClose className="h-5 w-5" />
-            )}
-          </Button>
-        )}
-        
-        {isExpanded && (
-          <div className="flex items-center gap-2 flex-1">
-            <div className="w-8 h-8 bg-gradient-to-br from-primary to-purple-600 rounded-lg flex items-center justify-center flex-shrink-0">
-              <span className="text-white font-bold text-sm">T</span>
-            </div>
-            <span className="font-semibold text-lg whitespace-nowrap">TradeLM</span>
-          </div>
-        )}
-        
+      {/* Header with Toggle - ChatGPT Style */}
+      <div className="h-16 flex items-center px-3 border-b border-border">
+        {/* Collapsed state: Logo that transforms to toggle on hover - clicking anywhere opens sidebar */}
         {!isExpanded && !isMobile && (
-          <div className="w-8 h-8 bg-gradient-to-br from-primary to-purple-600 rounded-lg flex items-center justify-center mx-auto">
-            <span className="text-white font-bold text-sm">T</span>
+          <div className="h-10 w-10 mx-auto flex items-center justify-center transition-all duration-200">
+            {sidebarHovered ? (
+              <PanelLeft className="h-5 w-5 transition-all duration-200" />
+            ) : (
+              <div className="w-8 h-8 bg-gradient-to-br from-primary to-purple-600 rounded-lg flex items-center justify-center transition-all duration-200">
+                <span className="text-white font-bold text-sm">T</span>
+              </div>
+            )}
           </div>
         )}
         
+        {/* Expanded state: Logo + Title + Toggle on right */}
+        {isExpanded && !isMobile && (
+          <>
+            <div className="flex items-center gap-2 flex-1">
+              <div className="w-8 h-8 bg-gradient-to-br from-primary to-purple-600 rounded-lg flex items-center justify-center flex-shrink-0">
+                <span className="text-white font-bold text-sm">T</span>
+              </div>
+              <span className="font-semibold text-lg whitespace-nowrap">TradeLM</span>
+            </div>
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={toggleSidebar}
+              className="h-9 w-9 flex-shrink-0"
+            >
+              <PanelLeftClose className="h-5 w-5" />
+            </Button>
+          </>
+        )}
+        
+        {/* Mobile expanded state */}
         {isMobile && mobileOpen && (
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={() => setMobileOpen(false)}
-            className="h-8 w-8 ml-auto"
-          >
-            <X className="h-4 w-4" />
-          </Button>
+          <>
+            <div className="flex items-center gap-2 flex-1">
+              <div className="w-8 h-8 bg-gradient-to-br from-primary to-purple-600 rounded-lg flex items-center justify-center flex-shrink-0">
+                <span className="text-white font-bold text-sm">T</span>
+              </div>
+              <span className="font-semibold text-lg whitespace-nowrap">TradeLM</span>
+            </div>
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={() => setMobileOpen(false)}
+              className="h-8 w-8"
+            >
+              <X className="h-4 w-4" />
+            </Button>
+          </>
         )}
       </div>
 

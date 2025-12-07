@@ -1,24 +1,15 @@
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
-import { Copy, Heart, Calendar, Clock } from "lucide-react";
 
 interface TradeCardProps {
   trade: {
-    id: number;
+    id: string;
     symbol: string;
     direction: string;
-    instrument: string;
-    account: string;
     entry: { date: string; time: string; price: number };
     exit: { date: string; time: string; price: number };
-    holdingTime: string;
     pl: number;
-    rMultiple: number;
-    returnPct: number;
     playbook: string;
-    mistakes: number;
-    notes: number;
     tags: string[];
   };
   onClick?: () => void;
@@ -41,7 +32,8 @@ export const TradeCard = ({ trade, onClick }: TradeCardProps) => {
         </div>
         <Badge 
           variant="outline"
-          className={trade.direction === "Long" 
+          // FIX: Check for uppercase "LONG"
+          className={trade.direction === "LONG" 
             ? "bg-success/10 text-success border-success/30" 
             : "bg-destructive/10 text-destructive border-destructive/30"
           }
@@ -58,10 +50,8 @@ export const TradeCard = ({ trade, onClick }: TradeCardProps) => {
           </p>
         </div>
         <div>
-          <p className="text-xs text-muted-foreground mb-1">R-Multiple</p>
-          <p className={`font-semibold text-lg ${trade.rMultiple > 0 ? "text-success" : "text-destructive"}`}>
-            {trade.rMultiple > 0 ? "+" : ""}{trade.rMultiple.toFixed(1)}R
-          </p>
+          <p className="text-xs text-muted-foreground mb-1">Entry</p>
+          <p className="font-medium">${trade.entry.price}</p>
         </div>
       </div>
 
