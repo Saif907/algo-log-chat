@@ -1,4 +1,3 @@
-// src/pages/StrategyDetail.tsx
 import { useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { Button } from "@/components/ui/button";
@@ -61,22 +60,25 @@ export const StrategyDetail = () => {
   const winners = trades.filter(t => (t.pnl || 0) > 0);
   const losers = trades.filter(t => (t.pnl || 0) <= 0);
   
-  const winRate = totalTrades > 0 ? (winners.length / totalTrades) * 100 : 0;
-  const netPL = trades.reduce((sum, t) => sum + (t.pnl || 0), 0);
+  // Calculate Gross Profit and Gross Loss directly
+  const grossProfit = winners.reduce((sum, t) => sum + (t.pnl || 0), 0);
+  const grossLoss = Math.abs(losers.reduce((sum, t) => sum + (t.pnl || 0), 0));
   
-  const avgWin = winners.length > 0 
-    ? winners.reduce((sum, t) => sum + (t.pnl || 0), 0) / winners.length 
-    : 0;
-    
-  const avgLoss = losers.length > 0 
-    ? losers.reduce((sum, t) => sum + (t.pnl || 0), 0) / losers.length 
-    : 0;
+  const netPL = grossProfit - grossLoss;
+  const winRate = totalTrades > 0 ? (winners.length / totalTrades) * 100 : 0;
+  
+  // Standard Profit Factor Calculation: Gross Profit / Gross Loss
+  const profitFactor = grossLoss > 0 
+    ? grossProfit / grossLoss 
+    : grossProfit > 0 ? 999 : 0;
 
-  const profitFactor = Math.abs(avgLoss) > 0 
-    ? (avgWin * winners.length) / Math.abs(avgLoss * losers.length) 
-    : winners.length > 0 ? 999 : 0;
+  // Averages for display
+  const avgWin = winners.length > 0 ? grossProfit / winners.length : 0;
+  // Use absolute value for Avg Loser display to match standard conventions (e.g. "Avg Loser: $50")
+  const avgLoss = losers.length > 0 ? grossLoss / losers.length : 0;
 
-  const expectancy = (winRate/100 * avgWin) + ((1 - winRate/100) * avgLoss);
+  // Expectancy = (Win % * Avg Win) - (Loss % * Avg Loss)
+  const expectancy = ((winRate / 100) * avgWin) - ((1 - (winRate / 100)) * avgLoss);
 
   // Helper for Trade Card Mapping
   const mapTradeToCard = (trade: any) => ({
@@ -99,7 +101,6 @@ export const StrategyDetail = () => {
   });
 
   // Parse Rules (JSONB)
-  // Default structure if rules is null
   const rules = (strategy.rules as any) || { market: [], entry: [], exit: [], risk: [] };
 
   return (
@@ -198,7 +199,7 @@ export const StrategyDetail = () => {
                 <p className="text-sm text-muted-foreground mb-1">Avg Loser</p>
                 <p className="text-xl font-semibold text-destructive flex items-center gap-1">
                   <TrendingDown className="h-4 w-4" />
-                  ${avgLoss.toFixed(2)}
+                  -${avgLoss.toFixed(2)}
                 </p>
               </div>
             </div>
