@@ -1,3 +1,4 @@
+// frontend/src/components/calendar/DayHoverCard.tsx
 import { HoverCard, HoverCardContent, HoverCardTrigger } from "@/components/ui/hover-card";
 import { TrendingUp, TrendingDown } from "lucide-react";
 
@@ -6,6 +7,7 @@ interface DayData {
   pnl: number;
   winRate?: number;
   bestStrategy?: string;
+  // We can add other fields from DayStats if needed
 }
 
 interface DayHoverCardProps {
@@ -15,7 +17,10 @@ interface DayHoverCardProps {
 }
 
 export const DayHoverCard = ({ day, data, children }: DayHoverCardProps) => {
-  const isProfit = data.pnl > 0;
+  const isProfit = data.pnl >= 0;
+
+  // Helper for safe currency display with high precision support
+  const fmtMoney = (val: number) => `$${Math.abs(val).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
   return (
     <HoverCard openDelay={0} closeDelay={100}>
@@ -41,7 +46,7 @@ export const DayHoverCard = ({ day, data, children }: DayHoverCardProps) => {
             <div className="flex justify-between">
               <span className="text-muted-foreground">Total P/L</span>
               <span className={isProfit ? "text-success font-semibold" : "text-destructive font-semibold"}>
-                ${isProfit ? "+" : ""}{data.pnl.toFixed(2)}
+                {isProfit ? "+" : "-"}{fmtMoney(data.pnl)}
               </span>
             </div>
             
@@ -53,14 +58,18 @@ export const DayHoverCard = ({ day, data, children }: DayHoverCardProps) => {
             {data.winRate !== undefined && (
               <div className="flex justify-between">
                 <span className="text-muted-foreground">Win Rate</span>
-                <span className="font-medium">{data.winRate}%</span>
+                <span className={`font-medium ${data.winRate >= 50 ? "text-success" : "text-muted-foreground"}`}>
+                  {data.winRate}%
+                </span>
               </div>
             )}
             
             {data.bestStrategy && (
               <div className="flex justify-between">
                 <span className="text-muted-foreground">Best Strategy</span>
-                <span className="font-medium truncate ml-2">{data.bestStrategy}</span>
+                <span className="font-medium truncate ml-2 max-w-[100px]" title={data.bestStrategy}>
+                  {data.bestStrategy}
+                </span>
               </div>
             )}
           </div>

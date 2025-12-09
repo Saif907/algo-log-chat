@@ -1,3 +1,4 @@
+// frontend/src/pages/AIChat.tsx
 import { useState, useRef, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import ReactMarkdown from "react-markdown";
@@ -28,14 +29,18 @@ import { useSidebar } from "@/contexts/SidebarContext";
 import { useLocation, useNavigate } from "react-router-dom";
 import { ImportMappingCard } from "@/components/chat/ImportMappingCard";
 import { TradeConfirmationCard } from "@/components/chat/TradeConfirmationCard";
+import { TradeCard } from "@/components/trades/TradeCard"; // ✅ Import TradeCard
+import { supabase } from "@/integrations/supabase/client";
 
 // --- Types ---
 interface OptimisticMessage {
+  id?: string; // Added ID for reliable updates
   role: "user" | "assistant";
   content: string;
   isOptimistic?: boolean;
-  type?: "text" | "import-confirmation" | "trade-confirmation"; 
+  type?: "text" | "import-confirmation" | "trade-confirmation" | "trade-receipt"; // ✅ Added trade-receipt
   data?: any;
+  created_at?: string;
 }
 
 const quickActions = [
@@ -90,39 +95,73 @@ export const AIChat = () => {
     }
   }, [isHistoryError]);
 
+  // ✅ NEW HANDLER: Transition from Draft -> Receipt
+  const handleTradeComplete = (savedTradeData: any) => {
+    setOptimisticMessages(prev => prev.map(msg => {
+      if (msg.type === "trade-confirmation") {
+        return { 
+          ...msg, 
+          type: "trade-receipt", 
+          data: savedTradeData,
+          content: "Trade successfully logged." // Fallback text
+        };
+      }
+      return msg;
+    }));
+    // Refresh lists
+    queryClient.invalidateQueries({ queryKey: ['trades'] });
+  };
+
   // --- Mutation: Send Text ---
   const sendMessageMutation = useMutation({
     mutationFn: async (text: string) => {
       return apiClient.sendMessage(text, currentSessionId || undefined);
     },
     onMutate: async (text) => {
-      const userMsg: OptimisticMessage = { role: "user", content: text, isOptimistic: true };
-      setOptimisticMessages([userMsg]);
+      const userMsg: OptimisticMessage = { 
+        id: Math.random().toString(), // Temp ID
+        role: "user", 
+        content: text, 
+        isOptimistic: true 
+      };
+      setOptimisticMessages(prev => [...prev, userMsg]);
       setInput(""); 
       setTimeout(() => messagesEndRef.current?.scrollIntoView({ behavior: "smooth" }), 10);
     },
     onSuccess: (data, variables) => {
-      // 1. Check for Tool Calls (Widgets)
+      const targetSessionId = data.session_id;
+      
+      const userMsg = { 
+        role: "user", 
+        content: variables, 
+        created_at: new Date().toISOString() 
+      };
+
       if (data.tool_call) {
         const toolMsg: OptimisticMessage = {
+           id: "tool-" + Math.random(),
            role: "assistant",
            content: data.response,
-           type: data.tool_call.type,
+           type: data.tool_call.type, // "trade-confirmation"
            data: data.tool_call.data
         };
-        // Show widget locally; backend already saved the "Draft" message text
+        
+        // Save User Msg to History Cache
+        queryClient.setQueryData(['chat-history', targetSessionId], (oldData: any[] | undefined) => {
+          return [...(oldData || []), userMsg];
+        });
+
+        // Show Tool Message in Optimistic (replaces the temp user msg)
         setOptimisticMessages([toolMsg]);
       } 
-      // 2. Normal Text Response
       else {
-        const targetSessionId = data.session_id;
-        const userMsg = { role: "user", content: variables, created_at: new Date().toISOString() };
         const aiMsg = { role: "assistant", content: data.response, created_at: new Date().toISOString() };
 
         queryClient.setQueryData(['chat-history', targetSessionId], (oldData: any[] | undefined) => {
           return [...(oldData || []), userMsg, aiMsg];
         });
-        setOptimisticMessages([]); // Clear optimistic state
+        
+        setOptimisticMessages([]); 
       }
 
       if (!currentSessionId) {
@@ -144,10 +183,10 @@ export const AIChat = () => {
       formData.append("message", text);
       formData.append("session_id", currentSessionId || ""); 
       
-      const token = (await import("@/integrations/supabase/client")).supabase.auth.getSession();
-      const session = (await token).data.session;
+      const { data: { session } } = await supabase.auth.getSession();
+      const API_URL = import.meta.env.VITE_API_URL || "http://localhost:8000/api/v1";
       
-      const res = await fetch("http://localhost:8000/api/v1/chat/upload", {
+      const res = await fetch(`${API_URL}/chat/upload`, {
         method: "POST",
         headers: { "Authorization": `Bearer ${session?.access_token}` },
         body: formData
@@ -176,7 +215,6 @@ export const AIChat = () => {
     }
   });
 
-  // --- Mutation: Delete Session ---
   const deleteSessionMutation = useMutation({
     mutationFn: (id: string) => apiClient.deleteSession(id),
     onSuccess: (_, deletedId) => {
@@ -186,8 +224,6 @@ export const AIChat = () => {
     }
   });
 
-  // --- Handlers ---
-  
   useEffect(() => {
     const state = location.state as { initialPrompt?: string } | null;
     if (state?.initialPrompt) {
@@ -217,16 +253,24 @@ export const AIChat = () => {
     }
   };
 
-  const displayMessages = [...history, ...optimisticMessages];
+  // Combine history + optimistic
+  const displayMessages = [...history];
+  optimisticMessages.forEach(optMsg => {
+    // Deduplication logic for User Messages
+    const lastHistoryMsg = displayMessages[displayMessages.length - 1];
+    if (optMsg.role === 'user' && lastHistoryMsg?.role === 'user' && lastHistoryMsg.content === optMsg.content) {
+      return;
+    }
+    displayMessages.push(optMsg);
+  });
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [history.length, optimisticMessages.length]);
+  }, [displayMessages.length]);
 
   return (
     <div className="min-h-screen flex flex-col relative bg-gradient-to-b from-background to-muted/10">
       
-      {/* Empty State */}
       {!currentSessionId && displayMessages.length === 0 ? (
         <div className="flex-1 flex flex-col items-center justify-center p-4 sm:p-6 space-y-8 animate-in fade-in zoom-in-95 duration-500">
            {/* Header */}
@@ -269,7 +313,6 @@ export const AIChat = () => {
             </div>
           </div>
           
-          {/* Quick Actions */}
           <div className="w-full max-w-2xl px-2 space-y-6">
             <div className="grid grid-cols-2 gap-3">
               {quickActions.map((action) => (
@@ -311,7 +354,6 @@ export const AIChat = () => {
                 </DropdownMenuContent>
               </DropdownMenu>
               
-              {/* DELETE SESSION WITH CONFIRMATION */}
               <AlertDialog>
                 <AlertDialogTrigger asChild>
                   <Button variant="ghost" size="icon" className="text-muted-foreground hover:text-destructive">
@@ -321,7 +363,7 @@ export const AIChat = () => {
                 <AlertDialogContent>
                   <AlertDialogHeader>
                     <AlertDialogTitle>Delete Chat?</AlertDialogTitle>
-                    <AlertDialogDescription>This will permanently remove this conversation history. This action cannot be undone.</AlertDialogDescription>
+                    <AlertDialogDescription>This will permanently remove this conversation history.</AlertDialogDescription>
                   </AlertDialogHeader>
                   <AlertDialogFooter>
                     <AlertDialogCancel>Cancel</AlertDialogCancel>
@@ -332,7 +374,6 @@ export const AIChat = () => {
             </div>
           </div>
 
-          {/* Messages */}
           <div className="flex-1 overflow-y-auto px-4 py-6 scroll-smooth">
             <div className="max-w-4xl mx-auto space-y-6 pb-32">
               {displayMessages.map((message, idx) => (
@@ -347,41 +388,46 @@ export const AIChat = () => {
                     "max-w-[85%] sm:max-w-[75%] rounded-2xl px-4 sm:px-5 py-2.5 sm:py-3 shadow-sm",
                     message.role === "user" ? "bg-primary text-primary-foreground rounded-tr-sm" : "bg-muted/50 border border-border/50 rounded-tl-sm backdrop-blur-sm"
                   )}>
-                    {/* WIDGET RENDERER */}
+                    {/* --- WIDGET RENDERER --- */}
+                    
+                    {/* 1. CSV Import Confirmation */}
                     {message.type === "import-confirmation" && message.data ? (
                       <ImportMappingCard 
                         data={message.data} 
-                        onComplete={(summary) => {
+                        onComplete={(summary: string) => {
                           setOptimisticMessages([{ role: "assistant", content: summary }]);
                           queryClient.invalidateQueries({ queryKey: ['chat-history'] });
                         }} 
                       />
-                    ) : message.type === "trade-confirmation" && message.data ? (
+                    ) 
+                    
+                    // 2. Trade Draft (Interactive Form)
+                    : message.type === "trade-confirmation" && message.data ? (
                        <TradeConfirmationCard
                           data={message.data}
-                          onConfirm={() => {
-                             setOptimisticMessages([{ role: "assistant", content: "Trade confirmed and logged successfully." }]);
-                             queryClient.invalidateQueries({ queryKey: ['trades'] });
-                          }}
+                          // ✅ Pass data back to parent on success
+                          onConfirm={(savedTrade) => handleTradeComplete(savedTrade)}
                           onCancel={() => setOptimisticMessages([])}
                        />
-                    ) : (
+                    ) 
+                    
+                    // 3. Trade Receipt (Read-Only Success)
+                    : message.type === "trade-receipt" && message.data ? (
+                       <div className="w-full max-w-md">
+                          <div className="flex items-center gap-2 mb-2 text-green-600 dark:text-green-400 px-1">
+                             <span className="text-sm font-medium">Successfully Logged</span>
+                          </div>
+                          <TradeCard trade={message.data} />
+                       </div>
+                    ) 
+                    
+                    // 4. Standard Text
+                    : (
                       <div className="text-sm leading-relaxed">
                         {message.role === "user" ? (
                           <div className="whitespace-pre-wrap">{message.content}</div>
                         ) : (
-                          <ReactMarkdown 
-                            remarkPlugins={[remarkGfm]}
-                            components={{
-                              ul: ({node, ...props}) => <ul className="list-disc pl-4 space-y-1 mb-2" {...props} />,
-                              ol: ({node, ...props}) => <ol className="list-decimal pl-4 space-y-1 mb-2" {...props} />,
-                              li: ({node, ...props}) => <li className="pl-1" {...props} />,
-                              strong: ({node, ...props}) => <span className="font-bold text-foreground" {...props} />,
-                              p: ({node, ...props}) => <p className="mb-2 last:mb-0" {...props} />,
-                            }}
-                          >
-                            {message.content}
-                          </ReactMarkdown>
+                          <ReactMarkdown remarkPlugins={[remarkGfm]}>{message.content}</ReactMarkdown>
                         )}
                       </div>
                     )}

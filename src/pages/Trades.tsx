@@ -1,3 +1,4 @@
+// frontend/src/pages/Trades.tsx
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
@@ -18,10 +19,18 @@ import { Skeleton } from "@/components/ui/skeleton";
 export const Trades = () => {
   const navigate = useNavigate();
   const { trades, isLoading } = useTrades();
+  
+  // UI State
   const [activeTab, setActiveTab] = useState("all");
   const [isAddTradeOpen, setIsAddTradeOpen] = useState(false);
   const [filtersOpen, setFiltersOpen] = useState(false);
 
+  // Filter State
+  const [filterSymbol, setFilterSymbol] = useState("");
+  const [filterInstrument, setFilterInstrument] = useState("all-instruments");
+  const [filterDirection, setFilterDirection] = useState("all-directions");
+
+  // Format Helpers
   const formatDate = (isoString: string | null) => {
     if (!isoString) return { date: "-", time: "-" };
     const date = new Date(isoString);
@@ -40,30 +49,64 @@ export const Trades = () => {
     return pnl / totalRisk;
   };
 
+  // Transform DB data to UI Model
   const mapTradeToCard = (trade: any) => {
     const entry = formatDate(trade.entry_time);
     const exit = formatDate(trade.exit_time);
     
+    // Safety Casting for Float/Numeric types
+    const entryPrice = Number(trade.entry_price || 0);
+    const exitPrice = Number(trade.exit_price || 0);
+    const quantity = Number(trade.quantity || 0);
+    const pnl = Number(trade.pnl || 0);
+    const stopLoss = trade.stop_loss ? Number(trade.stop_loss) : null;
+
     // Calculate derived metrics
-    const rMultiple = calculateRMultiple(
-      trade.pnl || 0, 
-      trade.entry_price, 
-      trade.stop_loss, 
-      trade.quantity
-    );
+    const rMultiple = calculateRMultiple(pnl, entryPrice, stopLoss, quantity);
 
     return {
       id: trade.id,
       symbol: trade.symbol,
-      direction: trade.direction, // "LONG" or "SHORT" from DB
-      entry: { date: entry.date, time: entry.time, price: trade.entry_price },
-      exit: { date: exit.date, time: exit.time, price: trade.exit_price || 0 },
-      pl: trade.pnl || 0,
+      direction: trade.direction, // "LONG" or "SHORT"
+      instrument_type: trade.instrument_type || "STOCK", // ✅ Added Instrument Type
+      status: trade.status,
+      entry: { 
+        date: entry.date, 
+        time: entry.time, 
+        price: entryPrice 
+      },
+      exit: { 
+        date: exit.date, 
+        time: exit.time, 
+        price: exitPrice 
+      },
+      quantity: quantity,
+      pl: pnl,
       rMultiple: rMultiple,
       playbook: trade.strategies?.name || "No playbook",
       tags: trade.tags || [],
     };
   };
+
+  // --- Filtering Logic ---
+  const filteredTrades = (trades || [])
+    .map(mapTradeToCard)
+    .filter((trade) => {
+      // 1. Tab Filter (Winning/Losing)
+      if (activeTab === "winning" && trade.pl <= 0) return false;
+      if (activeTab === "losing" && trade.pl >= 0) return false;
+
+      // 2. Symbol Search
+      if (filterSymbol && !trade.symbol.toLowerCase().includes(filterSymbol.toLowerCase())) return false;
+
+      // 3. Instrument Filter
+      if (filterInstrument !== "all-instruments" && trade.instrument_type !== filterInstrument.toUpperCase()) return false;
+
+      // 4. Direction Filter
+      if (filterDirection !== "all-directions" && trade.direction.toLowerCase() !== filterDirection.toLowerCase()) return false;
+
+      return true;
+    });
 
   if (isLoading) {
     return (
@@ -77,8 +120,6 @@ export const Trades = () => {
       </div>
     );
   }
-
-  const tradeList = trades?.map(mapTradeToCard) || [];
 
   return (
     <div className="min-h-screen pb-32">
@@ -113,6 +154,7 @@ export const Trades = () => {
             </TabsList>
           </Tabs>
 
+          {/* Collapsible Filters */}
           <Collapsible open={filtersOpen} onOpenChange={setFiltersOpen}>
             <Card className="bg-card border-border/50">
               <CollapsibleTrigger className="w-full p-4 sm:p-6 flex items-center justify-between hover:bg-muted/50 transition-colors">
@@ -124,20 +166,33 @@ export const Trades = () => {
               </CollapsibleTrigger>
               <CollapsibleContent className="px-4 pb-4 sm:px-6 sm:pb-6">
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-3 pt-4 border-t border-border/50">
+                  {/* Symbol Search */}
                   <div className="relative">
                     <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                    <Input placeholder="Search symbol..." className="pl-9" />
+                    <Input 
+                      placeholder="Search symbol..." 
+                      className="pl-9" 
+                      value={filterSymbol}
+                      onChange={(e) => setFilterSymbol(e.target.value)}
+                    />
                   </div>
-                  <Select defaultValue="all-instruments">
-                    <SelectTrigger><SelectValue /></SelectTrigger>
+                  
+                  {/* Instrument Type */}
+                  <Select value={filterInstrument} onValueChange={setFilterInstrument}>
+                    <SelectTrigger><SelectValue placeholder="Instrument" /></SelectTrigger>
                     <SelectContent>
                       <SelectItem value="all-instruments">All Instruments</SelectItem>
                       <SelectItem value="stock">Stock</SelectItem>
+                      <SelectItem value="crypto">Crypto</SelectItem>
+                      <SelectItem value="forex">Forex</SelectItem>
+                      <SelectItem value="futures">Futures</SelectItem>
                       <SelectItem value="options">Options</SelectItem>
                     </SelectContent>
                   </Select>
-                  <Select defaultValue="all-directions">
-                    <SelectTrigger><SelectValue /></SelectTrigger>
+
+                  {/* Direction */}
+                  <Select value={filterDirection} onValueChange={setFilterDirection}>
+                    <SelectTrigger><SelectValue placeholder="Direction" /></SelectTrigger>
                     <SelectContent>
                       <SelectItem value="all-directions">All Directions</SelectItem>
                       <SelectItem value="long">Long</SelectItem>
@@ -149,7 +204,7 @@ export const Trades = () => {
             </Card>
           </Collapsible>
 
-          {/* Desktop Table View - Restored Original Design */}
+          {/* Desktop Table View */}
           <div className="hidden lg:block">
             <Card className="bg-card border-border/50 overflow-hidden">
               <div className="overflow-x-auto">
@@ -158,6 +213,7 @@ export const Trades = () => {
                     <TableRow className="border-border/50 hover:bg-transparent">
                       <TableHead className="min-w-[120px]">Date</TableHead>
                       <TableHead className="min-w-[100px]">Symbol</TableHead>
+                      <TableHead className="min-w-[80px]">Type</TableHead> {/* New Column */}
                       <TableHead className="min-w-[80px]">Side</TableHead>
                       <TableHead className="min-w-[120px]">P/L</TableHead>
                       <TableHead className="min-w-[100px]">R-Multiple</TableHead>
@@ -166,14 +222,14 @@ export const Trades = () => {
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {tradeList.length === 0 ? (
+                    {filteredTrades.length === 0 ? (
                       <TableRow>
-                        <TableCell colSpan={7} className="text-center py-8 text-muted-foreground">
-                          No trades found. Start by adding one!
+                        <TableCell colSpan={8} className="text-center py-8 text-muted-foreground">
+                          No trades found matching your filters.
                         </TableCell>
                       </TableRow>
                     ) : (
-                      tradeList.map((trade) => (
+                      filteredTrades.map((trade) => (
                         <TableRow 
                           key={trade.id} 
                           className={`border-border/50 cursor-pointer transition-colors ${
@@ -191,6 +247,12 @@ export const Trades = () => {
                             <div className="font-semibold">{trade.symbol}</div>
                           </TableCell>
                           <TableCell>
+                            {/* Instrument Badge */}
+                            <Badge variant="secondary" className="text-[10px] h-5 px-1.5 font-medium">
+                              {trade.instrument_type}
+                            </Badge>
+                          </TableCell>
+                          <TableCell>
                             <Badge 
                               variant="outline"
                               className={trade.direction === "LONG" 
@@ -203,7 +265,7 @@ export const Trades = () => {
                           </TableCell>
                           <TableCell>
                             <div className={`font-semibold ${trade.pl > 0 ? "text-success" : "text-destructive"}`}>
-                              {trade.pl > 0 ? "+" : ""}${trade.pl.toFixed(2)}
+                              {trade.pl > 0 ? "+" : ""}${Math.abs(trade.pl).toFixed(2)}
                             </div>
                           </TableCell>
                           <TableCell>
@@ -247,7 +309,7 @@ export const Trades = () => {
               
               {/* Pagination */}
               <div className="border-t border-border/50 p-4 flex items-center justify-between">
-                <p className="text-sm text-muted-foreground">Showing {tradeList.length} trades</p>
+                <p className="text-sm text-muted-foreground">Showing {filteredTrades.length} trades</p>
                 <div className="flex items-center gap-2">
                   <Button variant="outline" size="sm" disabled>
                     <ChevronLeft className="h-4 w-4" />
@@ -264,7 +326,7 @@ export const Trades = () => {
 
           {/* Mobile Card View */}
           <div className="lg:hidden space-y-3">
-            {tradeList.map((trade) => (
+            {filteredTrades.map((trade) => (
               <TradeCard key={trade.id} trade={trade} onClick={() => navigate(`/trades/${trade.id}`)} />
             ))}
           </div>

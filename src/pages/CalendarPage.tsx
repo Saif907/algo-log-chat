@@ -1,3 +1,4 @@
+// frontend/src/pages/CalendarPage.tsx
 import { useState } from "react";
 import { ChevronLeft, ChevronRight, Download, Filter } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -10,11 +11,12 @@ import {
 } from "@/components/ui/select";
 import { ChatInput } from "@/components/ChatInput";
 import { Badge } from "@/components/ui/badge";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { DayHoverCard } from "@/components/calendar/DayHoverCard";
 import { DayDetailModal } from "@/components/calendar/DayDetailModal";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { useCalendar } from "@/hooks/use-calendar"; // Import the new hook
+import { useCalendar } from "@/hooks/use-calendar"; 
 import { Skeleton } from "@/components/ui/skeleton";
 
 export const CalendarPage = () => {
@@ -24,7 +26,7 @@ export const CalendarPage = () => {
   const [modalOpen, setModalOpen] = useState(false);
   const [mobileSheetOpen, setMobileSheetOpen] = useState(false);
 
-  // Fetch Real Data
+  // Fetch Real Data from the updated hook
   const { dailyStats, isLoading } = useCalendar(currentDate);
 
   const daysOfWeek = ["SUN", "MON", "TUE", "WED", "THU", "FRI", "SAT"];
@@ -69,11 +71,18 @@ export const CalendarPage = () => {
     return date.toLocaleDateString("en-US", { month: "short", year: "numeric" });
   };
 
+  // ✅ UPDATE: Handle different view modes (P&L vs Win Rate)
   const getCellStyle = (day: number | null) => {
     if (!day || !dailyStats) return "";
     const data = dailyStats[day];
-    if (!data) return "";
+    if (!data || data.trades === 0) return "hover:bg-muted/50";
     
+    if (viewMode === "Win Rate") {
+        if (data.winRate >= 50) return "bg-success/20 border-success/30 hover:bg-success/30";
+        return "bg-destructive/20 border-destructive/30 hover:bg-destructive/30";
+    }
+
+    // Default: P&L Heat
     if (data.pnl > 0) return "bg-success/20 border-success/30 hover:bg-success/30";
     if (data.pnl < 0) return "bg-destructive/20 border-destructive/30 hover:bg-destructive/30";
     return "hover:bg-muted/50";
@@ -109,6 +118,9 @@ export const CalendarPage = () => {
   };
 
   const selectedData = getSelectedDayData();
+
+  // Helper for safe currency display
+  const fmtMoney = (val: number) => `$${Math.abs(val).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
   return (
     <div className="min-h-screen pb-24 px-3 sm:px-4 md:px-6 lg:px-8">
@@ -190,7 +202,7 @@ export const CalendarPage = () => {
           </div>
         )}
 
-        {/* Calendar Grid - Desktop & Mobile (Content Switch handled by CSS previously, keeping logic) */}
+        {/* Calendar Grid - Desktop & Mobile */}
         {!isLoading && (
           <>
              {/* Mobile View */}
@@ -255,7 +267,8 @@ export const CalendarPage = () => {
                     <DayHoverCard
                       key={index}
                       day={day || 0}
-                      data={dayData || { trades: 0, pnl: 0 }}
+                      // @ts-ignore - safe fallback
+                      data={dayData || { trades: 0, pnl: 0, winRate: 0, emotion: "Neutral" }}
                     >
                       <div
                         onClick={() => handleDayClick(day, false)}
@@ -300,11 +313,11 @@ export const CalendarPage = () => {
         <div className="flex items-center justify-center sm:justify-end gap-4 sm:gap-6 mt-4">
           <div className="flex items-center gap-2">
             <div className="h-3 w-6 sm:w-8 bg-gradient-to-r from-destructive/40 to-destructive/60 rounded" />
-            <span className="text-xs sm:text-sm text-muted-foreground">Loss</span>
+            <span className="text-xs sm:text-sm text-muted-foreground">Loss / Low WR</span>
           </div>
           <div className="flex items-center gap-2">
             <div className="h-3 w-6 sm:w-8 bg-gradient-to-r from-success/40 to-success/60 rounded" />
-            <span className="text-xs sm:text-sm text-muted-foreground">Profit</span>
+            <span className="text-xs sm:text-sm text-muted-foreground">Profit / High WR</span>
           </div>
         </div>
       </div>
@@ -314,10 +327,11 @@ export const CalendarPage = () => {
         open={modalOpen}
         onOpenChange={setModalOpen}
         date={getSelectedDate()}
+        // @ts-ignore
         data={selectedData}
       />
 
-      {/* Mobile Sheet */}
+      {/* Mobile Sheet (Fully Updated Content) */}
       <Sheet open={mobileSheetOpen} onOpenChange={setMobileSheetOpen}>
         <SheetContent side="bottom" className="h-[85vh] rounded-t-2xl">
           <SheetHeader className="pb-4 border-b border-border">
@@ -339,7 +353,7 @@ export const CalendarPage = () => {
                   <div className="bg-muted/50 rounded-lg p-3">
                     <p className="text-xs text-muted-foreground">Total P&L</p>
                     <p className={`text-lg font-bold ${selectedData.pnl >= 0 ? "text-success" : "text-destructive"}`}>
-                      ${selectedData.pnl >= 0 ? "+" : ""}{selectedData.pnl.toFixed(2)}
+                      {selectedData.pnl >= 0 ? "+" : "-"}{fmtMoney(selectedData.pnl)}
                     </p>
                   </div>
                   <div className="bg-muted/50 rounded-lg p-3">
@@ -358,15 +372,19 @@ export const CalendarPage = () => {
               </TabsContent>
               
               <TabsContent value="trades" className="mt-4">
-                <div className="space-y-2">
+                <div className="space-y-2 h-[50vh] overflow-y-auto">
                   {selectedData.tradesList.map((trade) => (
                     <div key={trade.id} className="flex items-center justify-between p-3 bg-muted/50 rounded-lg">
                       <div>
-                        <p className="font-medium">{trade.symbol}</p>
-                        <p className="text-xs text-muted-foreground">{trade.direction}</p>
+                        <div className="flex items-center gap-2">
+                            <span className="font-bold">{trade.symbol}</span>
+                            {/* ✅ NEW: Mobile Instrument Badge */}
+                            <Badge variant="outline" className="text-[10px] px-1 py-0 h-4">{trade.instrument_type}</Badge>
+                        </div>
+                        <span className="text-xs text-muted-foreground">{trade.direction} • {trade.quantity} units</span>
                       </div>
                       <p className={`font-semibold ${trade.pnl >= 0 ? "text-success" : "text-destructive"}`}>
-                        ${trade.pnl >= 0 ? "+" : ""}{trade.pnl.toFixed(2)}
+                        {trade.pnl >= 0 ? "+" : "-"}{fmtMoney(trade.pnl)}
                       </p>
                     </div>
                   ))}

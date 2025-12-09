@@ -1,3 +1,4 @@
+// frontend/src/pages/Dashboard.tsx
 import { Card } from "@/components/ui/card";
 import { ChatInput } from "@/components/ChatInput";
 import { AreaChart, Area, BarChart, Bar, XAxis, YAxis, CartesianGrid, ResponsiveContainer, Cell, Tooltip } from "recharts";
@@ -26,8 +27,8 @@ export const Dashboard = () => {
     );
   }
 
-  // Helper for currency formatting
-  const fmtCurrency = (val: number) => `$${val?.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+  // Helper for currency formatting (Safe for floats)
+  const fmtCurrency = (val: number) => `$${Number(val || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
   // Mini Calendar Generation
   const today = new Date();
@@ -36,18 +37,13 @@ export const Dashboard = () => {
   const startDay = getDay(monthStart); // 0 = Sunday
   const daysInMonth = getDate(monthEnd);
   
-  // Create calendar grid array
-  // Padding for empty days at start
   const calendarDays = Array(startDay).fill(null);
-  // Actual days
   for (let i = 1; i <= daysInMonth; i++) {
     calendarDays.push(i);
   }
 
-  // Map daily performance to calendar
   const getDayStatus = (day: number) => {
     if (!day) return null;
-    // Format date to match the dailyData format "MMM dd" e.g., "Nov 15"
     const dateStr = format(new Date(today.getFullYear(), today.getMonth(), day), 'MMM dd');
     const dayStat = stats.dailyData.find(d => d.date === dateStr);
     
@@ -97,7 +93,9 @@ export const Dashboard = () => {
           <p className="text-xl sm:text-3xl font-bold">{stats.profitFactor}</p>
           <div className="mt-2 sm:mt-3 space-y-1">
             <div className="h-1 sm:h-1.5 bg-success rounded-full" style={{ width: "100%" }} />
-            <div className="h-1 sm:h-1.5 bg-destructive rounded-full" style={{ width: `${Math.min((1/Number(stats.profitFactor))*100, 100)}%` }} />
+            {/* Safe Profit Factor Bar */}
+            <div className="h-1 sm:h-1.5 bg-destructive rounded-full" 
+                 style={{ width: `${Math.min((1/Number(stats.profitFactor || 1))*100, 100)}%` }} />
           </div>
         </Card>
 
@@ -141,6 +139,7 @@ export const Dashboard = () => {
               <Tooltip 
                 contentStyle={{ backgroundColor: 'hsl(var(--card))', borderColor: 'hsl(var(--border))' }}
                 itemStyle={{ color: 'hsl(var(--foreground))' }}
+                formatter={(value: number) => fmtCurrency(value)}
               />
               <Area type="monotone" dataKey="value" stroke="hsl(var(--primary))" fill="url(#colorValue)" strokeWidth={2} />
             </AreaChart>
@@ -159,6 +158,7 @@ export const Dashboard = () => {
               <Tooltip 
                  cursor={{fill: 'hsl(var(--muted)/0.2)'}}
                  contentStyle={{ backgroundColor: 'hsl(var(--card))', borderColor: 'hsl(var(--border))' }}
+                 formatter={(value: number) => fmtCurrency(value)}
               />
               <Bar dataKey="value" radius={[4, 4, 0, 0]}>
                 {stats.dailyData.map((entry, index) => (
@@ -203,17 +203,21 @@ export const Dashboard = () => {
               <div key={instrument.symbol} className="flex items-center justify-between py-1.5 sm:py-2 border-b border-border last:border-0">
                 <div className="flex items-center gap-2 sm:gap-3">
                   <span className="text-xs sm:text-sm font-bold">{instrument.symbol}</span>
+                  {/* ✅ NEW: Instrument Type Badge */}
+                  <Badge variant="secondary" className="text-[10px] px-1 h-5">{instrument.type}</Badge>
+                </div>
+                <div className="flex items-center gap-2">
                   <Badge variant="outline" className={
                       instrument.direction === "LONG" ? "bg-cyan-500/10 text-cyan-500 border-cyan-500/20" : "bg-pink-500/10 text-pink-500 border-pink-500/20"
                   }>
                     {instrument.direction}
                   </Badge>
+                  <span className={`text-xs sm:text-sm font-semibold w-16 text-right ${
+                    instrument.pnl >= 0 ? "text-success" : "text-destructive"
+                  }`}>
+                    {instrument.pnl >= 0 ? "+" : ""}{fmtCurrency(instrument.pnl)}
+                  </span>
                 </div>
-                <span className={`text-xs sm:text-sm font-semibold ${
-                  instrument.pnl >= 0 ? "text-success" : "text-destructive"
-                }`}>
-                  {instrument.pnl >= 0 ? "+" : ""}{fmtCurrency(instrument.pnl)}
-                </span>
               </div>
             )) : (
                 <p className="text-sm text-muted-foreground">No trading data available.</p>
@@ -222,7 +226,7 @@ export const Dashboard = () => {
         </Card>
       </div>
 
-      {/* Recent Trades and Mini Calendar */}
+      {/* Recent Trades */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 sm:gap-4">
         <Card className="p-4 sm:p-6">
           <div className="flex items-center justify-between mb-3 sm:mb-4">
@@ -233,7 +237,10 @@ export const Dashboard = () => {
             {stats.recentTrades.length > 0 ? stats.recentTrades.map((trade: any, idx: number) => (
               <div key={idx} className="flex items-center justify-between py-2 hover:bg-muted/50 rounded px-2 cursor-pointer transition-colors" onClick={() => navigate(`/trades/${trade.id}`)}>
                 <div className="flex items-center gap-3">
-                    <span className="text-xs sm:text-sm font-medium w-16">{trade.symbol}</span>
+                    <div className="flex flex-col">
+                        <span className="text-xs sm:text-sm font-medium">{trade.symbol}</span>
+                        <span className="text-[10px] text-muted-foreground">{trade.instrument_type}</span>
+                    </div>
                     <Badge variant="outline" className={
                         trade.direction === "LONG" 
                         ? "bg-cyan-500/10 text-cyan-500 border-cyan-500/20" 
@@ -260,7 +267,7 @@ export const Dashboard = () => {
           </div>
         </Card>
 
-        {/* Mini Calendar (Restored) */}
+        {/* Mini Calendar */}
         <Card className="p-4 sm:p-6">
           <div className="flex items-center justify-between mb-3 sm:mb-4">
             <h3 className="text-xs sm:text-sm font-semibold">MINI CALENDAR</h3>
@@ -276,7 +283,7 @@ export const Dashboard = () => {
               if (!day) return <div key={`empty-${i}`} className="aspect-square" />;
               
               const status = getDayStatus(day);
-              let bgClass = "bg-muted/20"; // Default
+              let bgClass = "bg-muted/20"; 
               if (status === "win") bgClass = "bg-success/30 text-success-foreground font-bold border border-success/50";
               if (status === "loss") bgClass = "bg-destructive/30 text-destructive-foreground font-bold border border-destructive/50";
               if (status === "neutral") bgClass = "bg-muted/50 font-medium";

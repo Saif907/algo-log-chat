@@ -1,12 +1,12 @@
+// frontend/src/hooks/use-dashboard.ts
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 
 export const useDashboard = () => {
-  const { data: trades, isLoading, error } = useQuery({
+  const { data: stats, isLoading, error } = useQuery({
     queryKey: ['dashboard_trades'],
     queryFn: async () => {
       // Fetch all trades to calculate accurate cumulative stats
-      // For a production app with 10k+ trades, you'd want to calculate this in a Postgres View or Edge Function
       const { data, error } = await supabase
         .from('trades')
         .select(`
@@ -16,6 +16,8 @@ export const useDashboard = () => {
           entry_time,
           pnl,
           status,
+          instrument_type,
+          quantity,
           strategies (name)
         `)
         .order('entry_time', { ascending: true }); // Oldest first for cumulative calc
@@ -25,7 +27,7 @@ export const useDashboard = () => {
         throw error;
       }
       
-      return data || [];
+      return calculateStats(data || []);
     }
   });
 
@@ -42,10 +44,16 @@ export const useDashboard = () => {
     // Maps for Aggregation
     const dailyMap = new Map<string, number>();
     const strategyMap = new Map<string, { wins: number, total: number }>();
-    const instrumentMap = new Map<string, { pnl: number, count: number, direction: string }>();
+    const instrumentMap = new Map<string, { pnl: number, count: number, direction: string, type: string }>();
 
-    tradeList.forEach((trade) => {
-      const pnl = trade.pnl || 0;
+    // ✅ FILTER: Ignore Canceled/Pending trades for stats
+    const activeTrades = tradeList.filter(t => 
+      t.status === "CLOSED" || (t.status === "OPEN" && t.pnl !== null)
+    );
+
+    activeTrades.forEach((trade) => {
+      // ✅ SAFETY: Force number type for float/decimal math
+      const pnl = Number(trade.pnl || 0);
       netPL += pnl;
 
       // Win/Loss Counts
@@ -54,7 +62,7 @@ export const useDashboard = () => {
         grossProfit += pnl;
       } else if (pnl < 0) {
         lossCount++;
-        grossLoss += Math.abs(pnl); // Positive number for calc
+        grossLoss += Math.abs(pnl); 
       }
 
       // Daily P&L (Group by Date)
@@ -70,7 +78,14 @@ export const useDashboard = () => {
 
       // Top Instruments
       const sym = trade.symbol;
-      if (!instrumentMap.has(sym)) instrumentMap.set(sym, { pnl: 0, count: 0, direction: trade.direction });
+      if (!instrumentMap.has(sym)) {
+        instrumentMap.set(sym, { 
+          pnl: 0, 
+          count: 0, 
+          direction: trade.direction,
+          type: trade.instrument_type || "STOCK"
+        });
+      }
       const instStats = instrumentMap.get(sym)!;
       instStats.pnl += pnl;
       instStats.count++;
@@ -87,9 +102,13 @@ export const useDashboard = () => {
     });
 
     // 2. KPIs
-    const totalTrades = winCount + lossCount; // Exclude break-even/open if needed
+    const totalTrades = winCount + lossCount; 
     const winRate = totalTrades > 0 ? (winCount / totalTrades) * 100 : 0;
-    const profitFactor = grossLoss > 0 ? grossProfit / grossLoss : (grossProfit > 0 ? 999 : 0);
+    
+    // Profit Factor (Gross Profit / Gross Loss)
+    // If Gross Loss is 0, we cap the PF at a sensible high number (e.g. 100) to avoid Infinity
+    const profitFactor = grossLoss > 0 ? (grossProfit / grossLoss).toFixed(2) : (grossProfit > 0 ? "100.00" : "0.00");
+    
     const avgWin = winCount > 0 ? grossProfit / winCount : 0;
     const avgLoss = lossCount > 0 ? grossLoss / lossCount : 0;
 
@@ -106,13 +125,14 @@ export const useDashboard = () => {
     const topInstruments = Array.from(instrumentMap.entries())
         .map(([symbol, stats]) => ({
             symbol,
-            direction: stats.direction, // Just shows the last direction, simpler for MVP
+            direction: stats.direction,
+            type: stats.type,
             pnl: stats.pnl
         }))
         .sort((a, b) => Math.abs(b.pnl) - Math.abs(a.pnl))
         .slice(0, 5);
 
-    // 5. Recent Activity (Reverse chronological)
+    // 5. Recent Activity (Show ALL trades, even Open ones, sorted new -> old)
     const recentTrades = [...tradeList]
         .sort((a, b) => new Date(b.entry_time).getTime() - new Date(a.entry_time).getTime())
         .slice(0, 5);
@@ -132,7 +152,7 @@ export const useDashboard = () => {
   };
 
   return {
-    stats: calculateStats(trades || []),
+    stats,
     isLoading,
     error
   };
