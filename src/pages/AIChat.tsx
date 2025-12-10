@@ -5,7 +5,7 @@ import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { 
   Send, Sparkles, Globe, TrendingUp, BarChart, Shield, 
-  Plus, ChevronDown, MessageSquare, Trash2, Loader2, User, Paperclip 
+  Plus, ChevronDown, MessageSquare, Trash2, Loader2, User, Paperclip, X 
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -22,23 +22,22 @@ import {
   AlertDialogTitle, AlertDialogTrigger 
 } from "@/components/ui/alert-dialog";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { apiClient } from "@/lib/api-client";
+import { api } from "@/services/api"; 
 import { cn } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
 import { useSidebar } from "@/contexts/SidebarContext";
 import { useLocation, useNavigate } from "react-router-dom";
 import { ImportMappingCard } from "@/components/chat/ImportMappingCard";
 import { TradeConfirmationCard } from "@/components/chat/TradeConfirmationCard";
-import { TradeCard } from "@/components/trades/TradeCard"; // ✅ Import TradeCard
-import { supabase } from "@/integrations/supabase/client";
+import { TradeCard } from "@/components/trades/TradeCard";
 
 // --- Types ---
 interface OptimisticMessage {
-  id?: string; // Added ID for reliable updates
+  id?: string; 
   role: "user" | "assistant";
   content: string;
   isOptimistic?: boolean;
-  type?: "text" | "import-confirmation" | "trade-confirmation" | "trade-receipt"; // ✅ Added trade-receipt
+  type?: "text" | "import-confirmation" | "trade-confirmation" | "trade-receipt";
   data?: any;
   created_at?: string;
 }
@@ -69,33 +68,36 @@ export const AIChat = () => {
   const inputRef = useRef<HTMLInputElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // Sync Session
+  // Sync Session ID to LocalStorage
   useEffect(() => {
     if (currentSessionId) localStorage.setItem("tradeLm_activeSessionId", currentSessionId);
     else localStorage.removeItem("tradeLm_activeSessionId");
   }, [currentSessionId]);
 
-  // Queries
+  // --- Queries ---
+  
   const { data: sessions = [] } = useQuery({
     queryKey: ['chat-sessions'],
-    queryFn: () => apiClient.getSessions(),
+    queryFn: () => api.ai.getSessions(), 
   });
 
   const { data: history = [], isError: isHistoryError } = useQuery({
     queryKey: ['chat-history', currentSessionId],
-    queryFn: () => currentSessionId ? apiClient.getSessionHistory(currentSessionId) : Promise.resolve([]),
+    queryFn: () => currentSessionId ? api.ai.getHistory(currentSessionId) : Promise.resolve([]),
     enabled: !!currentSessionId,
     retry: 1,
   });
 
+  // Handle Session Not Found
   useEffect(() => {
     if (isHistoryError) {
       handleNewChat();
-      toast({ title: "Session not found", description: "Starting a new chat.", variant: "destructive" });
+      toast({ title: "Session expired", description: "Starting a new chat.", variant: "destructive" });
     }
   }, [isHistoryError]);
 
-  // ✅ NEW HANDLER: Transition from Draft -> Receipt
+  // --- Handlers ---
+
   const handleTradeComplete = (savedTradeData: any) => {
     setOptimisticMessages(prev => prev.map(msg => {
       if (msg.type === "trade-confirmation") {
@@ -103,23 +105,23 @@ export const AIChat = () => {
           ...msg, 
           type: "trade-receipt", 
           data: savedTradeData,
-          content: "Trade successfully logged." // Fallback text
+          content: "Trade successfully logged." 
         };
       }
       return msg;
     }));
-    // Refresh lists
+    // Invalidate trades list to show new trade immediately
     queryClient.invalidateQueries({ queryKey: ['trades'] });
   };
 
   // --- Mutation: Send Text ---
   const sendMessageMutation = useMutation({
     mutationFn: async (text: string) => {
-      return apiClient.sendMessage(text, currentSessionId || undefined);
+      return api.ai.sendMessage(currentSessionId || "", text); 
     },
     onMutate: async (text) => {
       const userMsg: OptimisticMessage = { 
-        id: Math.random().toString(), // Temp ID
+        id: Math.random().toString(), 
         role: "user", 
         content: text, 
         isOptimistic: true 
@@ -132,7 +134,7 @@ export const AIChat = () => {
       const targetSessionId = data.session_id;
       
       const userMsg = { 
-        role: "user", 
+        role: "user" as const, 
         content: variables, 
         created_at: new Date().toISOString() 
       };
@@ -142,20 +144,18 @@ export const AIChat = () => {
            id: "tool-" + Math.random(),
            role: "assistant",
            content: data.response,
-           type: data.tool_call.type, // "trade-confirmation"
+           type: data.tool_call.type, 
            data: data.tool_call.data
         };
         
-        // Save User Msg to History Cache
         queryClient.setQueryData(['chat-history', targetSessionId], (oldData: any[] | undefined) => {
           return [...(oldData || []), userMsg];
         });
 
-        // Show Tool Message in Optimistic (replaces the temp user msg)
         setOptimisticMessages([toolMsg]);
       } 
       else {
-        const aiMsg = { role: "assistant", content: data.response, created_at: new Date().toISOString() };
+        const aiMsg = { role: "assistant" as const, content: data.response, created_at: new Date().toISOString() };
 
         queryClient.setQueryData(['chat-history', targetSessionId], (oldData: any[] | undefined) => {
           return [...(oldData || []), userMsg, aiMsg];
@@ -165,7 +165,7 @@ export const AIChat = () => {
       }
 
       if (!currentSessionId) {
-        setCurrentSessionId(data.session_id);
+        setCurrentSessionId(targetSessionId);
         queryClient.invalidateQueries({ queryKey: ['chat-sessions'] });
       }
     },
@@ -178,21 +178,7 @@ export const AIChat = () => {
   // --- Mutation: Upload File ---
   const uploadFileMutation = useMutation({
     mutationFn: async ({ file, text }: { file: File, text: string }) => {
-      const formData = new FormData();
-      formData.append("file", file);
-      formData.append("message", text);
-      formData.append("session_id", currentSessionId || ""); 
-      
-      const { data: { session } } = await supabase.auth.getSession();
-      const API_URL = import.meta.env.VITE_API_URL || "http://localhost:8000/api/v1";
-      
-      const res = await fetch(`${API_URL}/chat/upload`, {
-        method: "POST",
-        headers: { "Authorization": `Bearer ${session?.access_token}` },
-        body: formData
-      });
-      if (!res.ok) throw new Error("Upload failed");
-      return res.json();
+       return api.ai.uploadFile(file, currentSessionId || "", text);
     },
     onMutate: ({ file, text }) => {
       const userMsg: OptimisticMessage = { role: "user", content: `Uploaded ${file.name}: ${text}`, isOptimistic: true };
@@ -216,7 +202,7 @@ export const AIChat = () => {
   });
 
   const deleteSessionMutation = useMutation({
-    mutationFn: (id: string) => apiClient.deleteSession(id),
+    mutationFn: (id: string) => api.ai.deleteSession(id),
     onSuccess: (_, deletedId) => {
       queryClient.invalidateQueries({ queryKey: ['chat-sessions'] });
       if (currentSessionId === deletedId) handleNewChat();
@@ -224,6 +210,7 @@ export const AIChat = () => {
     }
   });
 
+  // Handle Navigation with Initial Prompt
   useEffect(() => {
     const state = location.state as { initialPrompt?: string } | null;
     if (state?.initialPrompt) {
@@ -253,10 +240,9 @@ export const AIChat = () => {
     }
   };
 
-  // Combine history + optimistic
+  // Combine history + optimistic (with deduplication)
   const displayMessages = [...history];
   optimisticMessages.forEach(optMsg => {
-    // Deduplication logic for User Messages
     const lastHistoryMsg = displayMessages[displayMessages.length - 1];
     if (optMsg.role === 'user' && lastHistoryMsg?.role === 'user' && lastHistoryMsg.content === optMsg.content) {
       return;
@@ -388,9 +374,6 @@ export const AIChat = () => {
                     "max-w-[85%] sm:max-w-[75%] rounded-2xl px-4 sm:px-5 py-2.5 sm:py-3 shadow-sm",
                     message.role === "user" ? "bg-primary text-primary-foreground rounded-tr-sm" : "bg-muted/50 border border-border/50 rounded-tl-sm backdrop-blur-sm"
                   )}>
-                    {/* --- WIDGET RENDERER --- */}
-                    
-                    {/* 1. CSV Import Confirmation */}
                     {message.type === "import-confirmation" && message.data ? (
                       <ImportMappingCard 
                         data={message.data} 
@@ -399,30 +382,20 @@ export const AIChat = () => {
                           queryClient.invalidateQueries({ queryKey: ['chat-history'] });
                         }} 
                       />
-                    ) 
-                    
-                    // 2. Trade Draft (Interactive Form)
-                    : message.type === "trade-confirmation" && message.data ? (
+                    ) : message.type === "trade-confirmation" && message.data ? (
                        <TradeConfirmationCard
                           data={message.data}
-                          // ✅ Pass data back to parent on success
                           onConfirm={(savedTrade) => handleTradeComplete(savedTrade)}
                           onCancel={() => setOptimisticMessages([])}
                        />
-                    ) 
-                    
-                    // 3. Trade Receipt (Read-Only Success)
-                    : message.type === "trade-receipt" && message.data ? (
+                    ) : message.type === "trade-receipt" && message.data ? (
                        <div className="w-full max-w-md">
                           <div className="flex items-center gap-2 mb-2 text-green-600 dark:text-green-400 px-1">
                              <span className="text-sm font-medium">Successfully Logged</span>
                           </div>
                           <TradeCard trade={message.data} />
                        </div>
-                    ) 
-                    
-                    // 4. Standard Text
-                    : (
+                    ) : (
                       <div className="text-sm leading-relaxed">
                         {message.role === "user" ? (
                           <div className="whitespace-pre-wrap">{message.content}</div>
@@ -462,32 +435,79 @@ export const AIChat = () => {
       {/* Input Area */}
       <div className={`fixed bottom-0 left-0 right-0 z-50 p-4 transition-all duration-300 ${isMobile ? '' : 'pl-[var(--sidebar-width)]'}`}>
         <div className="max-w-4xl mx-auto">
-          {selectedFile && (
-            <div className="absolute -top-10 left-4 bg-background border px-3 py-1.5 rounded-full text-xs flex items-center gap-2 shadow-sm animate-in fade-in slide-in-from-bottom-2">
-              <span className="font-semibold text-primary">File:</span> {selectedFile.name}
-              <button onClick={() => setSelectedFile(null)} className="text-muted-foreground hover:text-destructive ml-2">×</button>
-            </div>
-          )}
-
-          <div className="relative flex items-center gap-2 bg-background/80 backdrop-blur-xl p-2 rounded-full border border-border shadow-2xl ring-1 ring-white/10">
-            <input type="file" ref={fileInputRef} className="hidden" accept=".csv" onChange={handleFileSelect} />
-            <Button size="icon" variant="ghost" className="rounded-full text-muted-foreground hover:text-primary hover:bg-primary/10 ml-1" onClick={() => fileInputRef.current?.click()}>
-              <Paperclip className="h-5 w-5" />
-            </Button>
-
-            <Input
-              ref={inputRef}
-              value={input}
-              onChange={(e) => setInput(e.target.value)}
-              onKeyDown={(e) => e.key === "Enter" && !e.shiftKey && handleSend()}
-              placeholder={selectedFile ? "Add a message about this file..." : "Ask anything about your trading..."}
-              className="flex-1 border-0 bg-transparent focus-visible:ring-0 px-2 h-12 text-base"
-              disabled={sendMessageMutation.isPending || uploadFileMutation.isPending}
-            />
+          {/* ✅ DYNAMIC CONTAINER: Transforms based on file presence */}
+          <div className={cn(
+            "relative bg-background/80 backdrop-blur-xl border border-border shadow-2xl ring-1 ring-white/10 transition-all duration-300 ease-in-out",
+            selectedFile ? "rounded-3xl p-4 flex flex-col gap-2 items-start" : "rounded-full p-2 flex items-center gap-2"
+          )}>
             
-            <Button size="icon" className={cn("h-10 w-10 rounded-full shadow-md transition-all duration-300", (sendMessageMutation.isPending || uploadFileMutation.isPending) ? "bg-muted text-muted-foreground" : "bg-primary text-primary-foreground hover:scale-105")} onClick={handleSend} disabled={(!input.trim() && !selectedFile) || sendMessageMutation.isPending || uploadFileMutation.isPending}>
-              {(sendMessageMutation.isPending || uploadFileMutation.isPending) ? <Loader2 className="h-5 w-5 animate-spin" /> : <Send className="h-5 w-5" />}
-            </Button>
+            {/* File Preview Chip (Inside the box) */}
+            {selectedFile && (
+              <div className="flex items-center gap-3 w-full animate-in fade-in slide-in-from-bottom-2">
+                 <div className="bg-muted p-2 rounded-xl flex items-center gap-3 border border-border/50 shadow-sm w-full sm:w-auto">
+                    <div className="bg-primary/10 p-2 rounded-lg text-primary">
+                       <Paperclip className="h-4 w-4" />
+                    </div>
+                    <div className="flex flex-col flex-1 min-w-0">
+                       <span className="text-sm font-medium truncate max-w-[180px]">{selectedFile.name}</span>
+                       <span className="text-[10px] text-muted-foreground">{(selectedFile.size / 1024).toFixed(1)} KB</span>
+                    </div>
+                    <Button 
+                      variant="ghost" 
+                      size="icon" 
+                      className="h-6 w-6 rounded-full hover:bg-destructive/10 hover:text-destructive -mr-1"
+                      onClick={() => setSelectedFile(null)}
+                    >
+                      <X className="h-3 w-3" />
+                    </Button>
+                 </div>
+              </div>
+            )}
+
+            {/* Input Row */}
+            <div className={cn("flex items-center gap-2 w-full", selectedFile && "pl-1")}>
+              <input type="file" ref={fileInputRef} className="hidden" accept=".csv" onChange={handleFileSelect} />
+              
+              <Button 
+                size="icon" 
+                variant="ghost" 
+                className={cn(
+                  "rounded-full text-muted-foreground hover:text-primary hover:bg-primary/10 transition-colors",
+                  selectedFile ? "h-8 w-8" : "h-10 w-10"
+                )} 
+                onClick={() => fileInputRef.current?.click()}
+                title="Attach file"
+              >
+                <Paperclip className={cn(selectedFile ? "h-4 w-4" : "h-5 w-5")} />
+              </Button>
+
+              <Input
+                ref={inputRef}
+                value={input}
+                onChange={(e) => setInput(e.target.value)}
+                onKeyDown={(e) => e.key === "Enter" && !e.shiftKey && handleSend()}
+                placeholder={selectedFile ? "Add a message about this file..." : "Ask anything about your trading..."}
+                className={cn(
+                  "flex-1 border-0 bg-transparent focus-visible:ring-0 px-2 text-base shadow-none",
+                  selectedFile ? "h-9" : "h-12"
+                )}
+                disabled={sendMessageMutation.isPending || uploadFileMutation.isPending}
+                autoFocus
+              />
+              
+              <Button 
+                size="icon" 
+                className={cn(
+                  "rounded-full shadow-md transition-all duration-300",
+                  (sendMessageMutation.isPending || uploadFileMutation.isPending) ? "bg-muted text-muted-foreground" : "bg-primary text-primary-foreground hover:scale-105",
+                  selectedFile ? "h-8 w-8" : "h-10 w-10"
+                )} 
+                onClick={handleSend} 
+                disabled={(!input.trim() && !selectedFile) || sendMessageMutation.isPending || uploadFileMutation.isPending}
+              >
+                {(sendMessageMutation.isPending || uploadFileMutation.isPending) ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className={cn(selectedFile ? "h-4 w-4" : "h-5 w-5")} />}
+              </Button>
+            </div>
           </div>
         </div>
       </div>

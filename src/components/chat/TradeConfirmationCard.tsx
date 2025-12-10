@@ -4,15 +4,18 @@ import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea"; // ✅ Added Textarea
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Check, Loader2, Calendar as CalendarIcon } from "lucide-react";
-import { apiClient, Strategy } from "@/lib/api-client"; 
+import { Check, Loader2, Calendar as CalendarIcon, X } from "lucide-react";
+import { api, Strategy, InstrumentType, TradeDirection, TradeStatus } from "@/services/api";
 import { useToast } from "@/hooks/use-toast";
 import { format } from "date-fns";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Calendar } from "@/components/ui/calendar";
+import { Switch } from "@/components/ui/switch"; // ✅ Added Switch for Open/Closed
 
-interface TradeData {
+// Input data comes from the LLM (Agentic Draft)
+interface TradeDraft {
   symbol: string;
   direction: string;
   entry_price: number;
@@ -20,28 +23,44 @@ interface TradeData {
   stop_loss?: number;
   target?: number;
   notes?: string;
-  entry_time?: string; 
+  entry_time?: string;
+  exit_time?: string;
+  exit_price?: number;
+  status?: string; // "OPEN" or "CLOSED"
   instrument_type?: string;
 }
 
 interface Props {
-  data: TradeData;
-  onConfirm: (savedData: any) => void; // ✅ Changed signature
+  data: TradeDraft;
+  onConfirm: (savedData: any) => void;
   onCancel: () => void;
 }
 
 export const TradeConfirmationCard = ({ data, onConfirm, onCancel }: Props) => {
   const { toast } = useToast();
   const [strategies, setStrategies] = useState<Strategy[]>([]);
-  
+  const [isClosed, setIsClosed] = useState(data.status?.toUpperCase() === "CLOSED" || !!data.exit_price);
+
   // Initialize state
   const [trade, setTrade] = useState({
     ...data,
-    direction: data.direction ? data.direction.charAt(0).toUpperCase() + data.direction.slice(1).toLowerCase() : "Long",
-    instrument_type: data.instrument_type || "STOCK",
+    symbol: data.symbol.toUpperCase(),
+    direction: (data.direction ? data.direction.charAt(0).toUpperCase() + data.direction.slice(1).toLowerCase() : "Long") as TradeDirection,
+    instrument_type: (data.instrument_type?.toUpperCase() || "STOCK") as InstrumentType,
+    
+    // Dates
     entry_time: data.entry_time ? new Date(data.entry_time) : new Date(),
+    exit_time: data.exit_time ? new Date(data.exit_time) : new Date(),
+    
     strategy_id: "none",
-    emotion: "Neutral"
+    
+    // Numbers
+    entry_price: data.entry_price || 0,
+    exit_price: data.exit_price || 0,
+    quantity: data.quantity || 0,
+    stop_loss: data.stop_loss || 0,
+    target: data.target || 0,
+    notes: data.notes || ""
   });
 
   const [loading, setLoading] = useState(false);
@@ -49,8 +68,8 @@ export const TradeConfirmationCard = ({ data, onConfirm, onCancel }: Props) => {
   useEffect(() => {
     const fetchStrategies = async () => {
       try {
-        const data = await apiClient.strategies.getAll();
-        setStrategies(data || []);
+        const list = await api.strategies.getAll();
+        setStrategies(list || []);
       } catch (err) {
         console.error("Failed to load strategies", err);
       }
@@ -58,61 +77,53 @@ export const TradeConfirmationCard = ({ data, onConfirm, onCancel }: Props) => {
     fetchStrategies();
   }, []);
 
-  const mapToCardData = (apiTrade: any) => {
-    const formatDate = (dateStr: string) => {
-      if (!dateStr) return { date: "-", time: "-" };
-      const d = new Date(dateStr);
-      return {
-        date: d.toLocaleDateString("en-US", { month: "short", day: "numeric" }),
-        time: d.toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit" })
-      };
-    };
-
-    const entry = formatDate(apiTrade.entry_time);
-    const exit = formatDate(apiTrade.exit_time);
-    const stratName = strategies.find(s => s.id === apiTrade.strategy_id)?.name || "No Strategy";
-
-    return {
-      id: apiTrade.id,
-      symbol: apiTrade.symbol,
-      direction: apiTrade.direction,
-      instrument_type: apiTrade.instrument_type,
-      status: apiTrade.status,
-      entry: { date: entry.date, time: entry.time, price: apiTrade.entry_price },
-      exit: { date: exit.date, time: exit.time, price: apiTrade.exit_price || 0 },
-      quantity: apiTrade.quantity,
-      pl: apiTrade.pnl || 0,
-      rMultiple: 0,
-      playbook: stratName,
-      tags: apiTrade.tags || []
-    };
-  };
-
   const handleSave = async () => {
+    // Basic Validation
+    if (!trade.symbol || trade.entry_price <= 0 || trade.quantity <= 0) {
+      toast({ title: "Invalid Data", description: "Please check Price and Quantity.", variant: "destructive" });
+      return;
+    }
+
     setLoading(true);
     try {
       const payload = {
         symbol: trade.symbol.toUpperCase(),
         instrument_type: trade.instrument_type,
         direction: trade.direction,
-        status: "Open",
+        status: (isClosed ? "CLOSED" : "OPEN") as TradeStatus, // ✅ Send correct status
         entry_price: Number(trade.entry_price),
+        exit_price: isClosed ? Number(trade.exit_price) : undefined, // ✅ Send exit price if closed
         quantity: Number(trade.quantity),
-        stop_loss: trade.stop_loss ? Number(trade.stop_loss) : null,
-        target: trade.target ? Number(trade.target) : null,
+        stop_loss: trade.stop_loss ? Number(trade.stop_loss) : undefined,
+        target: trade.target ? Number(trade.target) : undefined,
         entry_time: trade.entry_time.toISOString(),
-        encrypted_notes: trade.notes,
-        strategy_id: trade.strategy_id === "none" ? null : trade.strategy_id,
-        emotion: trade.emotion,
-        fees: 0
+        exit_time: isClosed ? trade.exit_time.toISOString() : undefined, // ✅ Send exit time
+        notes: trade.notes, // ✅ Send Notes
+        strategy_id: trade.strategy_id === "none" ? undefined : trade.strategy_id,
       };
 
-      const response = await apiClient.trades.create(payload);
-      const cardData = mapToCardData(response);
+      const response = await api.trades.create(payload);
+      
+      // Basic mapping for receipt
+      const cardData = {
+        id: response.id,
+        symbol: response.symbol,
+        direction: response.direction,
+        status: response.status,
+        entry: { 
+            date: new Date(response.entry_time).toLocaleDateString(), 
+            price: response.entry_price 
+        },
+        exit: response.exit_time ? { 
+            date: new Date(response.exit_time).toLocaleDateString(), 
+            price: response.exit_price 
+        } : undefined,
+        quantity: response.quantity,
+        pl: response.pnl || 0,
+        playbook: strategies.find(s => s.id === response.strategy_id)?.name || "No Strategy"
+      };
       
       toast({ title: "Trade Logged", description: `${trade.symbol} trade saved successfully.` });
-      
-      // ✅ Hand off to parent immediately
       onConfirm(cardData);
       
     } catch (error: any) {
@@ -124,30 +135,44 @@ export const TradeConfirmationCard = ({ data, onConfirm, onCancel }: Props) => {
   };
 
   return (
-    <Card className="p-4 w-full max-w-md border-primary/20 shadow-md space-y-4 bg-card/95 backdrop-blur-sm">
+    <Card className="p-4 w-full max-w-md border-primary/20 shadow-xl space-y-4 bg-card/95 backdrop-blur-sm animate-in zoom-in-95 duration-200">
+      
+      {/* Header with Status Toggle */}
       <div className="flex items-center justify-between border-b border-border/50 pb-2">
         <div className="flex items-center gap-2">
-          <div className="h-2 w-2 rounded-full bg-primary animate-pulse" />
-          <h3 className="font-semibold">Confirm Trade</h3>
+          <div className={`h-2 w-2 rounded-full animate-pulse ${isClosed ? 'bg-gray-400' : 'bg-green-500'}`} />
+          <h3 className="font-semibold text-sm">
+             {isClosed ? "Log Closed Trade" : "Log Open Trade"}
+          </h3>
         </div>
-        <span className="text-xs text-muted-foreground bg-muted px-2 py-0.5 rounded-full">AI Draft</span>
+        <div className="flex items-center gap-2">
+            <Label htmlFor="status-mode" className="text-xs text-muted-foreground">Closed?</Label>
+            <Switch 
+                id="status-mode" 
+                checked={isClosed} 
+                onCheckedChange={setIsClosed} 
+                className="scale-75"
+            />
+        </div>
       </div>
 
       <div className="grid grid-cols-2 gap-3">
+        {/* Symbol */}
         <div className="space-y-1">
           <Label className="text-xs text-muted-foreground">Symbol</Label>
           <Input 
             value={trade.symbol} 
             onChange={(e) => setTrade({...trade, symbol: e.target.value.toUpperCase()})}
-            className="h-8 text-sm font-semibold tracking-wide"
+            className="h-8 text-sm font-bold tracking-wide uppercase"
           />
         </div>
 
+        {/* Instrument Type */}
         <div className="space-y-1">
-          <Label className="text-xs text-muted-foreground">Type</Label>
+          <Label className="text-xs text-muted-foreground">Market</Label>
           <Select 
             value={trade.instrument_type} 
-            onValueChange={(val) => setTrade({...trade, instrument_type: val})}
+            onValueChange={(val) => setTrade({...trade, instrument_type: val as InstrumentType})}
           >
             <SelectTrigger className="h-8 text-sm"><SelectValue /></SelectTrigger>
             <SelectContent>
@@ -159,65 +184,24 @@ export const TradeConfirmationCard = ({ data, onConfirm, onCancel }: Props) => {
           </Select>
         </div>
 
+        {/* Direction */}
         <div className="space-y-1">
-          <Label className="text-xs text-muted-foreground">Direction</Label>
+          <Label className="text-xs text-muted-foreground">Side</Label>
           <Select 
             value={trade.direction} 
-            onValueChange={(val) => setTrade({...trade, direction: val})}
+            onValueChange={(val) => setTrade({...trade, direction: val as TradeDirection})}
           >
-            <SelectTrigger className="h-8 text-sm"><SelectValue /></SelectTrigger>
+            <SelectTrigger className={`h-8 text-sm font-medium ${trade.direction === 'Long' ? 'text-green-500' : 'text-red-500'}`}>
+              <SelectValue />
+            </SelectTrigger>
             <SelectContent>
-              <SelectItem value="Long">Long 🟢</SelectItem>
-              <SelectItem value="Short">Short 🔴</SelectItem>
+              <SelectItem value="Long" className="text-green-500">Long 🟢</SelectItem>
+              <SelectItem value="Short" className="text-red-500">Short 🔴</SelectItem>
             </SelectContent>
           </Select>
         </div>
 
-        <div className="space-y-1">
-          <Label className="text-xs text-muted-foreground">Entry Time</Label>
-          <Popover>
-            <PopoverTrigger asChild>
-              <Button variant="outline" size="sm" className="h-8 w-full justify-start text-left font-normal">
-                <CalendarIcon className="mr-2 h-3 w-3" />
-                {trade.entry_time ? format(trade.entry_time, "MMM d, HH:mm") : <span>Pick a date</span>}
-              </Button>
-            </PopoverTrigger>
-            <PopoverContent className="w-auto p-0" align="start">
-              <Calendar
-                mode="single"
-                selected={trade.entry_time}
-                onSelect={(date) => date && setTrade({...trade, entry_time: date})}
-                initialFocus
-              />
-              <div className="p-2 border-t text-xs text-center text-muted-foreground">
-                Time set to {format(trade.entry_time, "HH:mm")}
-              </div>
-            </PopoverContent>
-          </Popover>
-        </div>
-
-        <div className="space-y-1">
-          <Label className="text-xs text-muted-foreground">Entry Price</Label>
-          <Input 
-            type="number" 
-            step="any"
-            value={trade.entry_price} 
-            onChange={(e) => setTrade({...trade, entry_price: parseFloat(e.target.value)})}
-            className="h-8 text-sm"
-          />
-        </div>
-
-        <div className="space-y-1">
-          <Label className="text-xs text-muted-foreground">Quantity</Label>
-          <Input 
-            type="number" 
-            step="any"
-            value={trade.quantity} 
-            onChange={(e) => setTrade({...trade, quantity: parseFloat(e.target.value)})}
-            className="h-8 text-sm"
-          />
-        </div>
-
+        {/* Strategy Selector */}
         <div className="space-y-1">
           <Label className="text-xs text-muted-foreground">Strategy</Label>
           <Select 
@@ -228,37 +212,131 @@ export const TradeConfirmationCard = ({ data, onConfirm, onCancel }: Props) => {
             <SelectContent>
               <SelectItem value="none">No Strategy</SelectItem>
               {strategies.map(s => (
-                <SelectItem key={s.id} value={s.id!}>{s.name}</SelectItem>
+                <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>
               ))}
             </SelectContent>
           </Select>
         </div>
 
-        <div className="space-y-1">
-          <Label className="text-xs text-muted-foreground">Emotion</Label>
-          <Select 
-            value={trade.emotion} 
-            onValueChange={(val) => setTrade({...trade, emotion: val})}
-          >
-            <SelectTrigger className="h-8 text-sm"><SelectValue /></SelectTrigger>
-            <SelectContent>
-              <SelectItem value="Confident">Confident</SelectItem>
-              <SelectItem value="Fearful">Fearful</SelectItem>
-              <SelectItem value="Neutral">Neutral</SelectItem>
-              <SelectItem value="Greedy">Greedy</SelectItem>
-              <SelectItem value="Revenge">Revenge</SelectItem>
-            </SelectContent>
-          </Select>
+        {/* --- Entry Section --- */}
+        <div className="col-span-2 grid grid-cols-2 gap-3 bg-muted/30 p-2 rounded-md border border-border/50">
+             <div className="col-span-2 text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Entry Details</div>
+             
+             {/* Entry Price */}
+             <div className="space-y-1">
+                <Label className="text-xs text-muted-foreground">Entry Price</Label>
+                <Input 
+                    type="number" 
+                    step="any"
+                    value={trade.entry_price} 
+                    onChange={(e) => setTrade({...trade, entry_price: parseFloat(e.target.value)})}
+                    className="h-8 text-sm font-mono"
+                />
+            </div>
+
+            {/* Quantity */}
+            <div className="space-y-1">
+                <Label className="text-xs text-muted-foreground">Quantity</Label>
+                <Input 
+                    type="number" 
+                    step="any"
+                    value={trade.quantity} 
+                    onChange={(e) => setTrade({...trade, quantity: parseFloat(e.target.value)})}
+                    className="h-8 text-sm font-mono"
+                />
+            </div>
+
+            {/* Entry Date */}
+            <div className="space-y-1 col-span-2">
+                <Label className="text-xs text-muted-foreground">Entry Time</Label>
+                <Popover>
+                    <PopoverTrigger asChild>
+                    <Button variant="outline" size="sm" className="h-8 w-full justify-start text-left font-normal text-xs px-2">
+                        <CalendarIcon className="mr-2 h-3 w-3 opacity-50" />
+                        {trade.entry_time ? format(trade.entry_time, "MMM d, yyyy HH:mm") : <span>Pick date</span>}
+                    </Button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-auto p-0" align="start">
+                    <Calendar
+                        mode="single"
+                        selected={trade.entry_time}
+                        onSelect={(date) => date && setTrade({...trade, entry_time: date})}
+                        initialFocus
+                    />
+                    </PopoverContent>
+                </Popover>
+            </div>
+        </div>
+
+        {/* --- Exit Section (Conditionally Rendered) --- */}
+        {isClosed && (
+            <div className="col-span-2 grid grid-cols-2 gap-3 bg-red-500/5 p-2 rounded-md border border-red-500/20 animate-in slide-in-from-top-2">
+                <div className="col-span-2 text-[10px] font-bold text-red-500/70 uppercase tracking-wider">Exit Details</div>
+                
+                {/* Exit Price */}
+                <div className="space-y-1">
+                    <Label className="text-xs text-muted-foreground">Exit Price</Label>
+                    <Input 
+                        type="number" 
+                        step="any"
+                        value={trade.exit_price} 
+                        onChange={(e) => setTrade({...trade, exit_price: parseFloat(e.target.value)})}
+                        className="h-8 text-sm font-mono bg-background"
+                    />
+                </div>
+
+                {/* Exit Time */}
+                <div className="space-y-1">
+                    <Label className="text-xs text-muted-foreground">Exit Time</Label>
+                    <Popover>
+                        <PopoverTrigger asChild>
+                        <Button variant="outline" size="sm" className="h-8 w-full justify-start text-left font-normal text-xs px-2 bg-background">
+                            <CalendarIcon className="mr-2 h-3 w-3 opacity-50" />
+                            {trade.exit_time ? format(trade.exit_time, "MMM d") : <span>Pick date</span>}
+                        </Button>
+                        </PopoverTrigger>
+                        <PopoverContent className="w-auto p-0" align="start">
+                        <Calendar
+                            mode="single"
+                            selected={trade.exit_time}
+                            onSelect={(date) => date && setTrade({...trade, exit_time: date})}
+                            initialFocus
+                        />
+                        </PopoverContent>
+                    </Popover>
+                </div>
+            </div>
+        )}
+
+        {/* --- Notes Section (Added) --- */}
+        <div className="col-span-2 space-y-1">
+            <Label className="text-xs text-muted-foreground">Notes / Thoughts</Label>
+            <Textarea 
+                value={trade.notes} 
+                onChange={(e) => setTrade({...trade, notes: e.target.value})}
+                placeholder="Why did you take this trade?"
+                className="min-h-[60px] text-xs resize-none"
+            />
         </div>
       </div>
 
-      <div className="flex gap-2 pt-2 border-t border-border/50">
-        <Button variant="ghost" size="sm" className="flex-1 hover:bg-destructive/10 hover:text-destructive" onClick={onCancel}>
+      <div className="flex gap-2 pt-3 border-t border-border/50">
+        <Button 
+          variant="ghost" 
+          size="sm" 
+          className="flex-1 hover:bg-destructive/10 hover:text-destructive h-9" 
+          onClick={onCancel}
+        >
           Discard
         </Button>
-        <Button size="sm" className="flex-1 bg-primary/90 hover:bg-primary" onClick={handleSave} disabled={loading}>
+        <Button 
+          size="sm" 
+          className="flex-1 bg-primary hover:bg-primary/90 text-primary-foreground h-9 shadow-sm" 
+          onClick={handleSave} 
+          disabled={loading}
+        >
           {loading ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Check className="h-4 w-4 mr-2" />}
-          {loading ? "Saving..." : "Confirm Log"}
+          {loading ? "Saving..." : (isClosed ? "Log Closed Trade" : "Log Open Trade")}
         </Button>
       </div>
     </Card>
