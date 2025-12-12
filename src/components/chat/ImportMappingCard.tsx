@@ -11,9 +11,10 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 interface Props {
   data: UploadResponse;
   onComplete: (summary: string) => void;
+  sessionId?: string; // ✅ Added to pass context to backend
 }
 
-export const ImportMappingCard = ({ data, onComplete }: Props) => {
+export const ImportMappingCard = ({ data, onComplete, sessionId }: Props) => {
   const { toast } = useToast();
   const [loading, setLoading] = useState(false);
   
@@ -24,8 +25,8 @@ export const ImportMappingCard = ({ data, onComplete }: Props) => {
   const handleConfirm = async () => {
     setLoading(true);
     try {
-      // 1. Call Confirm API
-      const res = await api.ai.confirmImport(data.file_path, mapping);
+      // 1. Call Confirm API with Session ID
+      const res = await api.ai.confirmImport(data.file_path, mapping, sessionId);
       
       // 2. Notify Success
       toast({ 
@@ -33,7 +34,7 @@ export const ImportMappingCard = ({ data, onComplete }: Props) => {
         description: `Successfully logged ${res.count} trades.` 
       });
       
-      // 3. Callback to Chat (adds a system message)
+      // 3. Callback to Chat (adds a system message locally)
       onComplete(`✅ **Import Complete**\nSuccessfully imported ${res.count} trades from ${data.filename}.`);
       
     } catch (error: any) {

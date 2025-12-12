@@ -212,10 +212,14 @@ export const api = {
       });
     },
 
-    confirmImport: (filePath: string, mapping: Record<string, string>) =>
+    confirmImport: (filePath: string, mapping: Record<string, string>, sessionId?: string) =>
       request<{ status: string; count: number }>("/chat/import-confirm", {
         method: "POST",
-        body: JSON.stringify({ file_path: filePath, mapping }),
+        body: JSON.stringify({ 
+            file_path: filePath, 
+            mapping, 
+            session_id: sessionId 
+        }),
       })
   },
 
@@ -239,7 +243,6 @@ export const api = {
   // 5. Data Import (Legacy Support Wrapper)
   import: {
     uploadCsv: (file: File) => {
-      // Maps old calls to the new AI upload endpoint to prevent crashes in old components
       const formData = new FormData();
       formData.append("file", file);
       formData.append("session_id", "legacy-import"); 
