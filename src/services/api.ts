@@ -1,5 +1,3 @@
-// src/services/api.ts
-
 import { supabase } from "@/integrations/supabase/client";
 
 // --- Configuration ---
@@ -7,6 +5,7 @@ const API_BASE_URL = import.meta.env.VITE_API_URL || "http://localhost:8000/api/
 
 // --- Type Definitions ---
 
+// 1. Trades
 export type TradeDirection = "Long" | "Short";
 export type TradeStatus = "OPEN" | "CLOSED" | "PENDING" | "CANCELED";
 export type InstrumentType = "STOCK" | "CRYPTO" | "FOREX" | "FUTURES";
@@ -26,15 +25,28 @@ export interface Trade {
   fees?: number;
   stop_loss?: number;
   target?: number;
-  pnl?: number; 
-  notes?: string;      // Main notes field
-  raw_notes?: string;  // Alias for backward compatibility
-  tags?: string[];     // Tags for filtering
-  metadata?: Record<string, any>; // Flexible JSON for extra data (Emotion, Setup, etc.)
+  pnl?: number;
+  
+  // Content
+  notes?: string;      // This maps to 'encrypted_notes' from backend (but is plain text now)
+  raw_notes?: string;  
+  tags?: string[];
+  
+  // Metadata & Strategy
+  metadata?: Record<string, any>; 
   strategy_id?: string;
   created_at: string;
 }
 
+// 2. Pagination Wrapper
+export interface PaginatedResponse<T> {
+  data: T[];
+  total: number;
+  page: number;
+  size: number;
+}
+
+// 3. Strategies
 export interface Strategy {
   id: string;
   name: string;
@@ -46,6 +58,7 @@ export interface Strategy {
   created_at: string;
 }
 
+// 4. Chat / AI
 export interface ChatMessage {
   id?: string;
   role: "user" | "assistant" | "system";
@@ -59,9 +72,11 @@ export interface UploadResponse {
   filename: string;
   mapping: Record<string, string>;
   detected_headers: string[];
+  preview: Record<string, any>[]; // ✅ Grid Data
   message: string;
 }
 
+// 5. Brokers
 export interface BrokerAccount {
   id: string;
   broker_name: string;
@@ -71,7 +86,20 @@ export interface BrokerAccount {
   created_at: string;
 }
 
-// --- Core Request Wrapper (Robust Version) ---
+// 6. News / Research
+export interface NewsSource {
+  title: string;
+  url: string;
+  snippet?: string;
+}
+
+export interface NewsResult {
+  answer: string;
+  sources: NewsSource[];
+  related_questions: string[];
+}
+
+// --- Core Request Wrapper ---
 
 async function request<T>(endpoint: string, options: RequestInit = {}): Promise<T> {
   const { data: { session } } = await supabase.auth.getSession();
@@ -81,16 +109,12 @@ async function request<T>(endpoint: string, options: RequestInit = {}): Promise<
     throw new Error("User not authenticated");
   }
 
-  // 1. Determine Headers
   const isFormData = options.body instanceof FormData;
-  
   const headers: HeadersInit = {
     "Authorization": `Bearer ${token}`,
     ...options.headers,
   };
 
-  // 2. ONLY set JSON content type if it's NOT FormData
-  // (Browser automatically sets multipart/form-data with boundary for FormData)
   if (!isFormData) {
     Object.assign(headers, { "Content-Type": "application/json" });
   }
@@ -104,8 +128,8 @@ async function request<T>(endpoint: string, options: RequestInit = {}): Promise<
     let errorMessage = "API Request Failed";
     try {
       const errorData = await response.json();
-      // Handle FastAPI Validation Errors (422) specifically
       if (response.status === 422 && errorData.detail) {
+        // Handle Pydantic Validation Errors gracefully
         const detail = Array.isArray(errorData.detail) 
           ? errorData.detail.map((e: any) => `${e.loc.join('.')} ${e.msg}`).join(', ')
           : errorData.detail;
@@ -119,7 +143,6 @@ async function request<T>(endpoint: string, options: RequestInit = {}): Promise<
     throw new Error(errorMessage);
   }
 
-  // Handle 204 No Content
   if (response.status === 204) {
     return {} as T;
   }
@@ -130,12 +153,15 @@ async function request<T>(endpoint: string, options: RequestInit = {}): Promise<
 // --- API Modules ---
 
 export const api = {
-  // 1. Trades
+  // 1. Trades Module
   trades: {
-    getAll: (skip = 0, limit = 50, symbol?: string) => {
-      const params = new URLSearchParams({ skip: skip.toString(), limit: limit.toString() });
+    getAll: (page = 1, limit = 20, symbol?: string) => {
+      const params = new URLSearchParams({ 
+          page: page.toString(), 
+          limit: limit.toString() 
+      });
       if (symbol) params.append("symbol", symbol);
-      return request<Trade[]>(`/trades/?${params.toString()}`);
+      return request<PaginatedResponse<Trade>>(`/trades/?${params.toString()}`);
     },
     
     getOne: (id: string) => request<Trade>(`/trades/${id}`),
@@ -158,46 +184,24 @@ export const api = {
       }),
   },
 
-  // 2. Strategies
+  // 2. Strategies Module
   strategies: {
     getAll: () => request<Strategy[]>("/strategies/"),
-    
-    create: (strategyData: Partial<Strategy>) =>
-      request<Strategy>("/strategies/", {
-        method: "POST",
-        body: JSON.stringify(strategyData),
-      }),
-      
-    update: (id: string, updates: Partial<Strategy>) =>
-      request<Strategy>(`/strategies/${id}`, {
-        method: "PATCH",
-        body: JSON.stringify(updates),
-      }),
-      
-    delete: (id: string) =>
-      request<void>(`/strategies/${id}`, {
-        method: "DELETE",
-      }),
+    create: (data: Partial<Strategy>) => request<Strategy>("/strategies/", { method: "POST", body: JSON.stringify(data) }),
+    update: (id: string, data: Partial<Strategy>) => request<Strategy>(`/strategies/${id}`, { method: "PATCH", body: JSON.stringify(data) }),
+    delete: (id: string) => request<void>(`/strategies/${id}`, { method: "DELETE" }),
   },
 
-  // 3. AI & Chat
+  // 3. AI & Chat Module
   ai: {
     getSessions: () => request<{id: string, topic: string}[]>("/chat/sessions"),
-
-    deleteSession: (id: string) => 
-      request<void>(`/chat/sessions/${id}`, { method: "DELETE" }),
-
-    getHistory: (sessionId: string) =>
-      request<ChatMessage[]>(`/chat/${sessionId}/messages`),
-
+    deleteSession: (id: string) => request<void>(`/chat/sessions/${id}`, { method: "DELETE" }),
+    getHistory: (sessionId: string) => request<ChatMessage[]>(`/chat/${sessionId}/messages`),
+    
     sendMessage: (sessionId: string, message: string, model = "gpt-4-turbo") =>
       request<{ response: string; session_id: string; tool_call?: any }>("/chat", {
         method: "POST",
-        body: JSON.stringify({ 
-            session_id: sessionId, 
-            message: message,
-            model: model 
-        }),
+        body: JSON.stringify({ session_id: sessionId, message, model }),
       }),
       
     uploadFile: (file: File, sessionId: string, message = "") => {
@@ -205,52 +209,41 @@ export const api = {
       formData.append("file", file);
       formData.append("session_id", sessionId);
       formData.append("message", message);
-      
-      return request<UploadResponse>("/chat/upload", {
-        method: "POST",
-        body: formData,
-      });
+      return request<UploadResponse>("/chat/upload", { method: "POST", body: formData });
     },
-
+    
     confirmImport: (filePath: string, mapping: Record<string, string>, sessionId?: string) =>
       request<{ status: string; count: number }>("/chat/import-confirm", {
         method: "POST",
-        body: JSON.stringify({ 
-            file_path: filePath, 
-            mapping, 
-            session_id: sessionId 
-        }),
+        body: JSON.stringify({ file_path: filePath, mapping, session_id: sessionId }),
       })
   },
 
-  // 4. Brokers
+  // 4. Brokers Module
   brokers: {
     getAll: () => request<BrokerAccount[]>("/brokers/"),
-    
-    add: (data: { broker_name: string; api_key: string; api_secret: string }) =>
-      request<BrokerAccount>("/brokers/", {
-        method: "POST",
-        body: JSON.stringify(data),
-      }),
-
-    delete: (id: string) =>
-      request<void>(`/brokers/${id}`, { method: "DELETE" }),
-
-    sync: (id: string) =>
-      request<{ status: string; message: string }>(`/brokers/${id}/sync`, { method: "POST" }),
+    add: (data: any) => request<BrokerAccount>("/brokers/", { method: "POST", body: JSON.stringify(data) }),
+    delete: (id: string) => request<void>(`/brokers/${id}`, { method: "DELETE" }),
+    sync: (id: string) => request<{ status: string; message: string }>(`/brokers/${id}/sync`, { method: "POST" }),
   },
 
-  // 5. Data Import (Legacy Support Wrapper)
+  // 5. News / Perplexity Module
+  news: {
+    search: (query: string) => 
+      request<NewsResult>("/news/search", {
+        method: "POST",
+        body: JSON.stringify({ query })
+      })
+  },
+
+  // 6. Legacy Import (Optional wrapper)
   import: {
     uploadCsv: (file: File) => {
       const formData = new FormData();
       formData.append("file", file);
       formData.append("session_id", "legacy-import"); 
       formData.append("message", "Manual CSV Import");
-      return request<UploadResponse>("/chat/upload", {
-        method: "POST",
-        body: formData,
-      });
+      return request<UploadResponse>("/chat/upload", { method: "POST", body: formData });
     }
   }
 };

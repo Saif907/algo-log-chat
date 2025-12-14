@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
-import { Download, Plus, Filter, Search, ChevronLeft, ChevronRight } from "lucide-react";
+import { Download, Plus, Filter, Search, ChevronLeft, ChevronRight, Loader2 } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -18,19 +18,23 @@ import { Skeleton } from "@/components/ui/skeleton";
 
 export const Trades = () => {
   const navigate = useNavigate();
-  const { trades, isLoading } = useTrades();
   
-  // UI State
+  // --- Pagination & Filter State ---
+  const [page, setPage] = useState(1);
+  const pageSize = 20;
+  const [search, setSearch] = useState("");
   const [activeTab, setActiveTab] = useState("all");
   const [isAddTradeOpen, setIsAddTradeOpen] = useState(false);
   const [filtersOpen, setFiltersOpen] = useState(false);
 
   // Filter State
-  const [filterSymbol, setFilterSymbol] = useState("");
   const [filterInstrument, setFilterInstrument] = useState("all-instruments");
   const [filterDirection, setFilterDirection] = useState("all-directions");
 
-  // Format Helpers
+  // ✅ Fetch Paginated Data
+  const { trades, total, totalPages, isLoading, isFetching } = useTrades(page, pageSize, search);
+
+  // --- Format Helpers (Restored from Original) ---
   const formatDate = (isoString: string | null) => {
     if (!isoString) return { date: "-", time: "-" };
     const date = new Date(isoString);
@@ -40,7 +44,7 @@ export const Trades = () => {
     };
   };
 
-  // Helper to calculate R-Multiple dynamically
+  // ✅ Helper to calculate R-Multiple dynamically (Restored)
   const calculateRMultiple = (pnl: number, entry: number, stop: number | null, qty: number) => {
     if (!stop || stop === 0) return 0;
     const riskPerShare = Math.abs(entry - stop);
@@ -49,26 +53,25 @@ export const Trades = () => {
     return pnl / totalRisk;
   };
 
-  // Transform DB data to UI Model
+  // ✅ Transform DB data to UI Model (Restored)
+  // This ensures TradeCard receives the correct "pl", "entry", "exit" shapes
   const mapTradeToCard = (trade: any) => {
     const entry = formatDate(trade.entry_time);
     const exit = formatDate(trade.exit_time);
     
-    // Safety Casting for Float/Numeric types
     const entryPrice = Number(trade.entry_price || 0);
     const exitPrice = Number(trade.exit_price || 0);
     const quantity = Number(trade.quantity || 0);
     const pnl = Number(trade.pnl || 0);
     const stopLoss = trade.stop_loss ? Number(trade.stop_loss) : null;
 
-    // Calculate derived metrics
     const rMultiple = calculateRMultiple(pnl, entryPrice, stopLoss, quantity);
 
     return {
       id: trade.id,
       symbol: trade.symbol,
-      direction: trade.direction, // "LONG" or "SHORT"
-      instrument_type: trade.instrument_type || "STOCK", // ✅ Added Instrument Type
+      direction: trade.direction, 
+      instrument_type: trade.instrument_type || "STOCK",
       status: trade.status,
       entry: { 
         date: entry.date, 
@@ -88,41 +91,25 @@ export const Trades = () => {
     };
   };
 
-  // --- Filtering Logic ---
-  const filteredTrades = (trades || [])
+  // --- Filtering Logic (Applied to current page) ---
+  const processedTrades = (trades || [])
     .map(mapTradeToCard)
     .filter((trade) => {
-      // 1. Tab Filter (Winning/Losing)
+      // 1. Tab Filter
       if (activeTab === "winning" && trade.pl <= 0) return false;
       if (activeTab === "losing" && trade.pl >= 0) return false;
 
-      // 2. Symbol Search
-      if (filterSymbol && !trade.symbol.toLowerCase().includes(filterSymbol.toLowerCase())) return false;
-
-      // 3. Instrument Filter
+      // 2. Instrument Filter
       if (filterInstrument !== "all-instruments" && trade.instrument_type !== filterInstrument.toUpperCase()) return false;
 
-      // 4. Direction Filter
+      // 3. Direction Filter
       if (filterDirection !== "all-directions" && trade.direction.toLowerCase() !== filterDirection.toLowerCase()) return false;
 
       return true;
     });
 
-  if (isLoading) {
-    return (
-      <div className="p-8 space-y-4">
-        <div className="flex justify-between">
-          <Skeleton className="h-10 w-32" />
-          <Skeleton className="h-10 w-32" />
-        </div>
-        <Skeleton className="h-[200px] w-full rounded-xl" />
-        <Skeleton className="h-[200px] w-full rounded-xl" />
-      </div>
-    );
-  }
-
   return (
-    <div className="min-h-screen pb-32">
+    <div className="min-h-screen pb-32 animate-in fade-in duration-500">
       <div className="p-4 md:p-6 lg:p-8">
         <div className="max-w-[1600px] mx-auto space-y-6">
           {/* Header */}
@@ -166,18 +153,20 @@ export const Trades = () => {
               </CollapsibleTrigger>
               <CollapsibleContent className="px-4 pb-4 sm:px-6 sm:pb-6">
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-3 pt-4 border-t border-border/50">
-                  {/* Symbol Search */}
+                  {/* Symbol Search - Resets page on change */}
                   <div className="relative">
                     <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                     <Input 
                       placeholder="Search symbol..." 
                       className="pl-9" 
-                      value={filterSymbol}
-                      onChange={(e) => setFilterSymbol(e.target.value)}
+                      value={search}
+                      onChange={(e) => {
+                        setSearch(e.target.value);
+                        setPage(1); 
+                      }}
                     />
                   </div>
                   
-                  {/* Instrument Type */}
                   <Select value={filterInstrument} onValueChange={setFilterInstrument}>
                     <SelectTrigger><SelectValue placeholder="Instrument" /></SelectTrigger>
                     <SelectContent>
@@ -190,7 +179,6 @@ export const Trades = () => {
                     </SelectContent>
                   </Select>
 
-                  {/* Direction */}
                   <Select value={filterDirection} onValueChange={setFilterDirection}>
                     <SelectTrigger><SelectValue placeholder="Direction" /></SelectTrigger>
                     <SelectContent>
@@ -213,7 +201,7 @@ export const Trades = () => {
                     <TableRow className="border-border/50 hover:bg-transparent">
                       <TableHead className="min-w-[120px]">Date</TableHead>
                       <TableHead className="min-w-[100px]">Symbol</TableHead>
-                      <TableHead className="min-w-[80px]">Type</TableHead> {/* New Column */}
+                      <TableHead className="min-w-[80px]">Type</TableHead>
                       <TableHead className="min-w-[80px]">Side</TableHead>
                       <TableHead className="min-w-[120px]">P/L</TableHead>
                       <TableHead className="min-w-[100px]">R-Multiple</TableHead>
@@ -222,14 +210,21 @@ export const Trades = () => {
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {filteredTrades.length === 0 ? (
+                    {isLoading ? (
+                       // Skeleton Rows
+                       Array.from({ length: 5 }).map((_, i) => (
+                         <TableRow key={i}>
+                           <TableCell colSpan={8}><Skeleton className="h-10 w-full" /></TableCell>
+                         </TableRow>
+                       ))
+                    ) : processedTrades.length === 0 ? (
                       <TableRow>
                         <TableCell colSpan={8} className="text-center py-8 text-muted-foreground">
-                          No trades found matching your filters.
+                          No trades found.
                         </TableCell>
                       </TableRow>
                     ) : (
-                      filteredTrades.map((trade) => (
+                      processedTrades.map((trade) => (
                         <TableRow 
                           key={trade.id} 
                           className={`border-border/50 cursor-pointer transition-colors ${
@@ -247,7 +242,6 @@ export const Trades = () => {
                             <div className="font-semibold">{trade.symbol}</div>
                           </TableCell>
                           <TableCell>
-                            {/* Instrument Badge */}
                             <Badge variant="secondary" className="text-[10px] h-5 px-1.5 font-medium">
                               {trade.instrument_type}
                             </Badge>
@@ -307,17 +301,29 @@ export const Trades = () => {
                 </Table>
               </div>
               
-              {/* Pagination */}
+              {/* ✅ Pagination Controls */}
               <div className="border-t border-border/50 p-4 flex items-center justify-between">
-                <p className="text-sm text-muted-foreground">Showing {filteredTrades.length} trades</p>
+                <p className="text-sm text-muted-foreground">
+                    Showing {((page - 1) * pageSize) + 1} to {Math.min(page * pageSize, total)} of {total} trades
+                </p>
                 <div className="flex items-center gap-2">
-                  <Button variant="outline" size="sm" disabled>
-                    <ChevronLeft className="h-4 w-4" />
+                  <Button 
+                    variant="outline" 
+                    size="sm" 
+                    onClick={() => setPage(p => Math.max(1, p - 1))}
+                    disabled={page === 1 || isLoading}
+                  >
+                    <ChevronLeft className="h-4 w-4 mr-1" />
                     Previous
                   </Button>
-                  <Button variant="outline" size="sm">
+                  <Button 
+                    variant="outline" 
+                    size="sm" 
+                    onClick={() => setPage(p => Math.min(totalPages, p + 1))}
+                    disabled={page >= totalPages || isLoading}
+                  >
                     Next
-                    <ChevronRight className="h-4 w-4" />
+                    <ChevronRight className="h-4 w-4 ml-1" />
                   </Button>
                 </div>
               </div>
@@ -326,13 +332,36 @@ export const Trades = () => {
 
           {/* Mobile Card View */}
           <div className="lg:hidden space-y-3">
-            {filteredTrades.map((trade) => (
-              <TradeCard key={trade.id} trade={trade} onClick={() => navigate(`/trades/${trade.id}`)} />
-            ))}
+            {isLoading ? (
+               Array.from({ length: 3 }).map((_, i) => (
+                 <Skeleton key={i} className="h-40 w-full rounded-xl" />
+               ))
+            ) : (
+                processedTrades.map((trade) => (
+                  <TradeCard key={trade.id} trade={trade} onClick={() => navigate(`/trades/${trade.id}`)} />
+                ))
+            )}
+            
+            {/* Mobile Pagination */}
+            <div className="flex justify-center gap-4 pt-4">
+                <Button variant="outline" size="sm" onClick={() => setPage(p => Math.max(1, p - 1))} disabled={page === 1}>
+                    Prev
+                </Button>
+                <Button variant="outline" size="sm" onClick={() => setPage(p => Math.min(totalPages, p + 1))} disabled={page >= totalPages}>
+                    Next
+                </Button>
+            </div>
           </div>
         </div>
       </div>
       
+      {/* Background Fetch Indicator */}
+      {isFetching && !isLoading && (
+           <div className="fixed bottom-4 right-4 bg-background/80 backdrop-blur border p-2 rounded-full shadow-lg animate-pulse z-50">
+               <Loader2 className="h-4 w-4 animate-spin text-primary" />
+           </div>
+      )}
+
       <ChatInput placeholder="Ask about your trades or trade details..." />
       <AddTradeModal open={isAddTradeOpen} onOpenChange={setIsAddTradeOpen} />
     </div>
