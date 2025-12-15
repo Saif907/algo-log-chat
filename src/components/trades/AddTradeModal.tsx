@@ -1,4 +1,5 @@
-import { useState, useEffect } from "react";
+// frontend/src/components/trades/AddTradeModal.tsx
+import { useState, useEffect, useMemo } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
@@ -41,8 +42,16 @@ import { useTrades } from "@/hooks/use-trades";
 import { useStrategies } from "@/hooks/use-strategies";
 import { cn } from "@/lib/utils";
 
-// --- Schema Definition ---
-// Use combined datetime inputs (datetime-local) for mobile friendliness.
+/**
+ * AddTradeModal with screenshots upload
+ *
+ * Notes:
+ * - uploadTradeScreenshots() is a small helper that posts files to an upload endpoint.
+ *   Replace with your Supabase/S3 helper as needed.
+ */
+
+/* -------------------- Schema -------------------- */
+// Use preprocessors to convert datetime-local string -> Date
 const formSchema = z
   .object({
     symbol: z.string().min(1, "Symbol is required").transform((s) => s.toUpperCase()),
@@ -59,38 +68,57 @@ const formSchema = z
     target: z.coerce.number().optional(),
     fees: z.coerce.number().optional().default(0),
 
-    // entry_datetime and exit_datetime will be submitted as strings (datetime-local) and preprocessed to Date objects
+    // date/time as datetime-local string -> Date
     entry_datetime: z.preprocess((val) => (val ? new Date(val as string) : val), z.date()),
     exit_datetime: z.preprocess((val) => (val ? new Date(val as string) : val), z.date().optional()),
 
     strategy_id: z.string().optional(),
     notes: z.string().optional(),
+
+    // screenshots will be an array of File objects client-side; we accept optional array here
+    screenshots: z.array(z.any()).optional(),
   })
   .superRefine((data, ctx) => {
-    // Closed Trade Requirements
     if (data.status === "CLOSED") {
       if (!data.exit_price || data.exit_price <= 0) {
-        ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Exit Price is required for closed trades", path: ["exit_price"] });
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: "Exit Price is required for closed trades",
+          path: ["exit_price"],
+        });
       }
       if (!data.exit_datetime) {
-        ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Exit Date/Time is required", path: ["exit_datetime"] });
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: "Exit Date/Time is required",
+          path: ["exit_datetime"],
+        });
       }
-
-      // Time Logic Check
       if (data.exit_datetime && data.entry_datetime) {
         if (data.exit_datetime < data.entry_datetime) {
-          ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Exit cannot be before Entry", path: ["exit_datetime"] });
+          ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            message: "Exit cannot be before Entry",
+            path: ["exit_datetime"],
+          });
         }
       }
     }
 
-    // Risk Logic
     if (data.stop_loss) {
       if (data.direction === "LONG" && data.stop_loss >= data.entry_price) {
-        ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Stop Loss must be below Entry for Longs", path: ["stop_loss"] });
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: "Stop Loss must be below Entry for Longs",
+          path: ["stop_loss"],
+        });
       }
       if (data.direction === "SHORT" && data.stop_loss <= data.entry_price) {
-        ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Stop Loss must be above Entry for Shorts", path: ["stop_loss"] });
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: "Stop Loss must be above Entry for Shorts",
+          path: ["stop_loss"],
+        });
       }
     }
   });
@@ -102,12 +130,61 @@ interface Props {
   onOpenChange: (open: boolean) => void;
 }
 
+/* -------------------- Upload helper -------------------- */
+/**
+ * Replace this with your real upload logic (Supabase / S3 / server-side endpoint).
+ * Expected behaviour: for each File, return an object { url: string }.
+ *
+ * Example Supabase approach (conceptual):
+ *   const { data, error } = await supabase.storage.from('trade-screenshots').upload(path, file, { upsert: false });
+ *   const url = supabase.storage.from('trade-screenshots').getPublicUrl(path).publicURL;
+ *
+ * This helper calls an example endpoint POST /api/uploads/trade-screenshot which should return { url } JSON.
+ */
+async function uploadTradeScreenshots(files: File[]): Promise<string[]> {
+  if (!files || files.length === 0) return [];
+
+  const uploadedUrls: string[] = [];
+
+  // Sequential upload is simple and reliable. If you want concurrency, implement Promise.all with attention to rate limits.
+  for (const file of files) {
+    // Minimal client-side validation (server must re-validate)
+    if (!(file instanceof File)) continue;
+
+    const fd = new FormData();
+    fd.append("file", file);
+    // optional metadata
+    // fd.append("purpose", "trade_screenshot");
+
+    // Example endpoint - implement server side to accept multipart/form-data and respond with JSON { url: string }
+    const res = await fetch("/api/uploads/trade-screenshot", {
+      method: "POST",
+      body: fd,
+    });
+
+    if (!res.ok) {
+      // You may want to surface the error in UI instead of throwing
+      throw new Error("Failed to upload screenshot");
+    }
+
+    const body = await res.json();
+    // Expect { url: string }
+    if (body?.url) uploadedUrls.push(body.url);
+  }
+
+  return uploadedUrls;
+}
+
+/* -------------------- Component -------------------- */
 export const AddTradeModal = ({ open, onOpenChange }: Props) => {
   const { createTrade } = useTrades();
   const { strategies } = useStrategies();
   const [showAdvanced, setShowAdvanced] = useState(false);
 
-  // Default Values: use datetime-local format for default (string)
+  // Preview URLs for thumbnails (revoke on change)
+  const [previewUrls, setPreviewUrls] = useState<string[]>([]);
+
+  // Defaults
   const now = new Date();
   const nowLocal = format(now, "yyyy-MM-dd'T'HH:mm");
 
@@ -122,20 +199,37 @@ export const AddTradeModal = ({ open, onOpenChange }: Props) => {
       exit_datetime: undefined,
       fees: 0,
       notes: "",
+      screenshots: [],
     },
   });
 
   const watchValues = form.watch();
+
+  // Keep preview URLs in sync with screenshots array
+  useEffect(() => {
+    const files: File[] = (watchValues.screenshots as any) || [];
+    // Revoke previous
+    previewUrls.forEach((u) => URL.revokeObjectURL(u));
+    const urls = files.map((f) => URL.createObjectURL(f));
+    setPreviewUrls(urls);
+    return () => {
+      urls.forEach((u) => URL.revokeObjectURL(u));
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [watchValues.screenshots]);
 
   // Reset when modal closes
   useEffect(() => {
     if (!open) {
       form.reset();
       setShowAdvanced(false);
+      previewUrls.forEach((u) => URL.revokeObjectURL(u));
+      setPreviewUrls([]);
     }
-  }, [open, form]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open]);
 
-  // When status changes, populate/clear exit fields appropriately
+  // When status toggles, auto-populate/clear exit datetime fields
   useEffect(() => {
     if (watchValues.status === "CLOSED") {
       if (!watchValues.exit_datetime) form.setValue("exit_datetime", (nowLocal as unknown) as any);
@@ -158,7 +252,8 @@ export const AddTradeModal = ({ open, onOpenChange }: Props) => {
   };
 
   const calculateRR = () => {
-    const { entry_price, stop_loss, target } = watchValues as any;
+    const anyVals = watchValues as any;
+    const { entry_price, stop_loss, target } = anyVals;
     if (!entry_price || !stop_loss || !target) return null;
     const risk = Math.abs(entry_price - stop_loss);
     const reward = Math.abs(target - entry_price);
@@ -166,9 +261,9 @@ export const AddTradeModal = ({ open, onOpenChange }: Props) => {
   };
 
   const calculatePnL = () => {
-    const { status, entry_price, exit_price, quantity, direction, fees } = watchValues as any;
+    const anyVals = watchValues as any;
+    const { status, entry_price, exit_price, quantity, direction, fees } = anyVals;
     if (status !== "CLOSED" || !entry_price || !exit_price || !quantity) return null;
-
     const multiplier = direction === "LONG" ? 1 : -1;
     const gross = (exit_price - entry_price) * quantity * multiplier;
     const net = gross - (fees || 0);
@@ -178,16 +273,69 @@ export const AddTradeModal = ({ open, onOpenChange }: Props) => {
   const rrRatio = calculateRR();
   const pnl = calculatePnL();
 
+  // Client-side constraints for screenshots
+  const MAX_FILES = 5;
+  const MAX_FILE_SIZE = 5 * 1024 * 1024; // 5MB per file
+
+  const handleFilesAdd = (incoming: FileList | File[]) => {
+    const existing: File[] = (watchValues.screenshots as any) || [];
+    const incomingArr = Array.from(incoming as FileList);
+    const allowedToAdd = Math.max(0, MAX_FILES - existing.length);
+    const candidates = incomingArr.slice(0, allowedToAdd);
+    const valid: File[] = [];
+    for (const f of candidates) {
+      if (f.size > MAX_FILE_SIZE) {
+        // Optionally show toast or form error; here we ignore oversize files
+        console.warn(`File ${f.name} too large, skipped`);
+        continue;
+      }
+      valid.push(f);
+    }
+    if (valid.length === 0) return;
+    form.setValue("screenshots", [...existing, ...valid]);
+  };
+
+  const handleDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (e.dataTransfer?.files?.length) {
+      handleFilesAdd(e.dataTransfer.files);
+    }
+  };
+
+  const removeScreenshot = (index: number) => {
+    const existing: File[] = (watchValues.screenshots as any) || [];
+    const copy = existing.slice();
+    copy.splice(index, 1);
+    form.setValue("screenshots", copy);
+  };
+
   const onSubmit = async (values: FormValues) => {
-    // entry_datetime and exit_datetime are strings in datetime-local format; zod preprocess converts to Dates
+    // upload screenshots first, if any
+    let screenshotUrls: string[] = [];
+    const filesToUpload: File[] = (values.screenshots as any) || [];
+
+    if (filesToUpload.length) {
+      try {
+        screenshotUrls = await uploadTradeScreenshots(filesToUpload);
+      } catch (err) {
+        // Handle upload failure: show error to user, abort submit, or continue without screenshots.
+        // Here we re-throw to prevent saving incomplete trade (adapt as you want).
+        console.error(err);
+        throw err;
+      }
+    }
+
     const entryIso = (values.entry_datetime as unknown as Date).toISOString();
     const exitIso = values.exit_datetime ? (values.exit_datetime as unknown as Date).toISOString() : undefined;
 
+    // Build payload. Keep enums intact; backend should accept the fields you need.
     await createTrade.mutateAsync({
       ...values,
       entry_time: entryIso,
       exit_time: exitIso,
       strategy_id: values.strategy_id === "none" ? undefined : values.strategy_id,
+      screenshots: screenshotUrls, // array of uploaded URLs
     });
 
     onOpenChange(false);
@@ -195,8 +343,7 @@ export const AddTradeModal = ({ open, onOpenChange }: Props) => {
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      {/* max-h ensures viewport scrolling inside modal on small screens; removed custom scrollbar classes to match app styles */}
-      <DialogContent className="w-full max-w-xl sm:max-w-2xl max-h-[85vh] p-4 md:p-6 overflow-y-auto">
+      <DialogContent className="w-full max-w-xl sm:max-w-2xl max-h-[85vh] p-4 md:p-6 overflow-y-auto modal-scroll">
         <DialogHeader className="space-y-1">
           <DialogTitle className="text-lg font-semibold">Log Trade</DialogTitle>
           <DialogDescription className="text-sm text-muted-foreground">Quick entry — additional fields are optional.</DialogDescription>
@@ -297,7 +444,7 @@ export const AddTradeModal = ({ open, onOpenChange }: Props) => {
               </div>
             </div>
 
-            {/* Entry block: calendar + time popover on desktop, native datetime-local on mobile */}
+            {/* Entry block (date+time combined) */}
             <section className="space-y-2">
               <h3 className="text-sm font-medium">Entry</h3>
 
@@ -307,9 +454,6 @@ export const AddTradeModal = ({ open, onOpenChange }: Props) => {
                   name="entry_datetime"
                   render={({ field }) => {
                     const current = field.value as string | undefined;
-                    const selectedDate = current ? new Date(current) : new Date();
-                    const timeValue = format(selectedDate, "HH:mm");
-
                     return (
                       <FormItem>
                         <FormLabel className="text-xs">Date & Time</FormLabel>
@@ -336,17 +480,17 @@ export const AddTradeModal = ({ open, onOpenChange }: Props) => {
                                   selected={current ? new Date(current) : new Date()}
                                   onSelect={(date) => {
                                     if (!date) return;
-                                    const t = (current ? format(new Date(current), "HH:mm") : format(new Date(), "HH:mm"));
+                                    const t = current ? format(new Date(current), "HH:mm") : format(new Date(), "HH:mm");
                                     const combined = format(date, "yyyy-MM-dd") + "T" + t;
                                     field.onChange(combined);
                                   }}
                                 />
 
                                 <div className="flex flex-col gap-2 w-40">
-                                  <Label className="text-xs">Time</Label>
+                                  <FormLabel className="text-xs">Time</FormLabel>
                                   <Input
                                     type="time"
-                                    value={timeValue}
+                                    value={current ? format(new Date(current), "HH:mm") : format(new Date(), "HH:mm")}
                                     onChange={(e) => {
                                       const datePart = current ? format(new Date(current), "yyyy-MM-dd") : format(new Date(), "yyyy-MM-dd");
                                       const combined = datePart + "T" + e.target.value;
@@ -397,7 +541,7 @@ export const AddTradeModal = ({ open, onOpenChange }: Props) => {
               </div>
             </section>
 
-            {/* Exit block (conditional) */}
+            {/* Exit block */}
             {watchValues.status === "CLOSED" && (
               <section className="space-y-2 pt-3 border-t">
                 <div className="flex items-center justify-between">
@@ -415,9 +559,6 @@ export const AddTradeModal = ({ open, onOpenChange }: Props) => {
                     name="exit_datetime"
                     render={({ field }) => {
                       const current = field.value as string | undefined;
-                      const selectedDate = current ? new Date(current) : new Date();
-                      const timeValue = format(selectedDate, "HH:mm");
-
                       return (
                         <FormItem>
                           <FormLabel className="text-xs">Date & Time</FormLabel>
@@ -442,17 +583,17 @@ export const AddTradeModal = ({ open, onOpenChange }: Props) => {
                                     selected={current ? new Date(current) : new Date()}
                                     onSelect={(date) => {
                                       if (!date) return;
-                                      const t = (current ? format(new Date(current), "HH:mm") : format(new Date(), "HH:mm"));
+                                      const t = current ? format(new Date(current), "HH:mm") : format(new Date(), "HH:mm");
                                       const combined = format(date, "yyyy-MM-dd") + "T" + t;
                                       field.onChange(combined);
                                     }}
                                   />
 
                                   <div className="flex flex-col gap-2 w-40">
-                                    <Label className="text-xs">Time</Label>
+                                    <FormLabel className="text-xs">Time</FormLabel>
                                     <Input
                                       type="time"
-                                      value={timeValue}
+                                      value={current ? format(new Date(current), "HH:mm") : format(new Date(), "HH:mm")}
                                       onChange={(e) => {
                                         const datePart = current ? format(new Date(current), "yyyy-MM-dd") : format(new Date(), "yyyy-MM-dd");
                                         const combined = datePart + "T" + e.target.value;
@@ -511,7 +652,7 @@ export const AddTradeModal = ({ open, onOpenChange }: Props) => {
               </Button>
             </div>
 
-            {/* Advanced (collapsible) */}
+            {/* Advanced: Risk, Strategy, Notes, Screenshots */}
             {showAdvanced && (
               <section className="space-y-4 pt-3 border-t">
                 <div>
@@ -597,10 +738,73 @@ export const AddTradeModal = ({ open, onOpenChange }: Props) => {
                     </FormItem>
                   )}
                 />
+
+                {/* Screenshots upload */}
+                <FormField
+                  control={form.control}
+                  name="screenshots"
+                  render={({ field }) => {
+                    const files: File[] = (field.value as any) || [];
+                    return (
+                      <FormItem>
+                        <FormLabel className="text-xs">Screenshots (Optional)</FormLabel>
+                        <FormControl>
+                          <div
+                            onDrop={handleDrop}
+                            onDragOver={(e) => e.preventDefault()}
+                            className="rounded-lg border border-dashed border-border p-3 bg-muted/10"
+                          >
+                            <label
+                              htmlFor="screenshot-upload"
+                              className="flex flex-col items-center justify-center gap-1 cursor-pointer text-sm text-muted-foreground"
+                            >
+                              <div className="font-medium text-foreground">Click to upload or drag & drop</div>
+                              <div className="text-xs">PNG, JPG — up to {MAX_FILES} images • max {MAX_FILE_SIZE / (1024 * 1024)}MB each</div>
+
+                              <input
+                                id="screenshot-upload"
+                                type="file"
+                                accept="image/*"
+                                multiple
+                                className="hidden"
+                                onChange={(e) => {
+                                  if (!e.target.files) return;
+                                  handleFilesAdd(e.target.files);
+                                  // reset input so same file can be selected again if user removed it
+                                  e.currentTarget.value = "";
+                                }}
+                              />
+                            </label>
+
+                            {/* Previews */}
+                            {files.length > 0 && (
+                              <div className="mt-3 grid grid-cols-3 sm:grid-cols-4 gap-2">
+                                {files.map((f, i) => (
+                                  <div key={i} className="relative rounded-md overflow-hidden border">
+                                    <img src={previewUrls[i]} alt={f.name} className="h-20 w-full object-cover" />
+                                    <button
+                                      type="button"
+                                      onClick={() => removeScreenshot(i)}
+                                      className="absolute top-1 right-1 rounded-full bg-background/90 p-1 text-xs opacity-80"
+                                      aria-label={`Remove ${f.name}`}
+                                    >
+                                      ✕
+                                    </button>
+                                  </div>
+                                ))}
+                              </div>
+                            )}
+                          </div>
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    );
+                  }}
+                />
               </section>
             )}
 
-            {/* Footer: responsive layout */}
+            {/* Footer */}
             <DialogFooter className="pt-4">
               <div className="w-full flex flex-col sm:flex-row sm:justify-end gap-2">
                 <Button type="button" variant="ghost" onClick={() => onOpenChange(false)} className="w-full sm:w-auto">

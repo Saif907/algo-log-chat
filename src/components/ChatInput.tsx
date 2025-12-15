@@ -1,10 +1,10 @@
 // frontend/src/components/ChatInput.tsx
 import { useState, useRef, useEffect } from "react";
-import { Sparkles, Send, Paperclip, X, FileText } from "lucide-react"; 
+import { Sparkles, Send, Plus, X, FileText, Globe, Image as ImageIcon } from "lucide-react"; 
 import { Button } from "@/components/ui/button";
 import { useSidebar } from "@/contexts/SidebarContext";
 import { cn } from "@/lib/utils";
-import { useNavigate, useLocation } from "react-router-dom";
+import { useNavigate } from "react-router-dom";
 
 interface ChatInputProps {
   placeholder?: string;
@@ -20,8 +20,12 @@ interface ChatInputProps {
   // ✅ New Props for Chat Page Integration
   selectedFile?: File | null;
   onFileRemove?: () => void;
-  variant?: "floating" | "docked"; // 'docked' for AI Chat page, 'floating' for Dashboard
+  variant?: "floating" | "docked"; 
   isLoading?: boolean;
+  
+  // ✅ New Web Search Props
+  isWebSearchEnabled?: boolean;
+  onWebSearchToggle?: () => void;
 }
 
 export const ChatInput = ({ 
@@ -37,10 +41,11 @@ export const ChatInput = ({
   selectedFile,
   onFileRemove,
   variant = "floating",
-  isLoading = false
+  isLoading = false,
+  isWebSearchEnabled = false,
+  onWebSearchToggle
 }: ChatInputProps) => {
   const navigate = useNavigate();
-  const location = useLocation();
   const { sidebarWidth, isMobile } = useSidebar();
   
   // Internal state for uncontrolled mode
@@ -65,7 +70,6 @@ export const ChatInput = ({
   }, [variant]);
 
   // --- Handlers ---
-
   const handleMouseEnter = () => {
     if (variant === "floating") setIsExpanded(true);
   };
@@ -99,12 +103,7 @@ export const ChatInput = ({
     if (onSend) {
       onSend();
     } else {
-      // Default: Navigate to Chat with state
-      navigate("/ai-chat", { 
-        state: { initialPrompt: currentValue } 
-        // Note: We cannot pass the 'File' object via state safely. 
-        // Dashboard usage implies text-only start usually.
-      });
+      navigate("/ai-chat", { state: { initialPrompt: currentValue } });
     }
     
     if (!isControlled) setLocalValue("");
@@ -124,25 +123,17 @@ export const ChatInput = ({
     }
   };
 
-  // Auto-focus when expanding (floating only)
-  useEffect(() => {
-    if (variant === "floating" && isExpanded && inputRef.current) {
-      const timer = setTimeout(() => inputRef.current?.focus(), 200);
-      return () => clearTimeout(timer);
-    }
-  }, [isExpanded, variant]);
-
   // Positioning
   const contentLeft = isMobile ? 16 : sidebarWidth + 16;
   const contentRight = 16;
   
   // Docked styles vs Floating styles
   const containerClasses = variant === "docked" 
-    ? "relative w-full max-w-4xl mx-auto" 
+    ? "relative w-full max-w-3xl mx-auto" 
     : "fixed bottom-6 z-50 flex justify-center pointer-events-none";
     
   const wrapperClasses = variant === "docked"
-    ? "relative flex flex-col items-start rounded-3xl shadow-lg border border-border bg-background/80 backdrop-blur-xl ring-1 ring-white/10 transition-all duration-300"
+    ? "relative flex flex-col items-start rounded-[26px] shadow-sm border border-border/60 bg-muted/30 hover:bg-muted/50 focus-within:bg-muted/50 focus-within:ring-1 focus-within:ring-ring/20 transition-all duration-300"
     : cn(
         "pointer-events-auto relative flex items-center rounded-full shadow-2xl overflow-hidden bg-background/80 backdrop-blur-xl border border-border ring-1 ring-white/10",
         "transition-all duration-500 ease-[cubic-bezier(0.23,1,0.32,1)]",
@@ -170,16 +161,16 @@ export const ChatInput = ({
           </div>
         )}
 
-        {/* Content Area (Visible when expanded or docked) */}
+        {/* Content Area */}
         {(isExpanded || variant === "docked") && (
           <div className="w-full flex flex-col">
             
             {/* 1. File Preview Chip */}
             {selectedFile && (
-               <div className="px-4 pt-3 pb-1 w-full animate-in fade-in slide-in-from-bottom-2">
-                 <div className="bg-muted/50 p-2 rounded-xl flex items-center gap-3 border border-border/50 shadow-sm w-fit max-w-full">
+               <div className="px-4 pt-4 pb-0 w-full animate-in fade-in slide-in-from-bottom-2">
+                 <div className="bg-background p-2 rounded-xl flex items-center gap-3 border border-border shadow-sm w-fit max-w-full">
                     <div className="bg-primary/10 p-2 rounded-lg text-primary">
-                       <FileText className="h-4 w-4" />
+                       {selectedFile.type.startsWith('image/') ? <ImageIcon className="h-4 w-4" /> : <FileText className="h-4 w-4" />}
                     </div>
                     <div className="flex flex-col min-w-0">
                        <span className="text-sm font-medium truncate max-w-[180px] sm:max-w-[240px]">
@@ -205,45 +196,70 @@ export const ChatInput = ({
             )}
 
             {/* 2. Input Row */}
-            <div className="flex items-center w-full p-2 gap-2">
-              {/* File Upload Trigger */}
-              {onFileSelect && (
-                <>
-                  <input 
-                    type="file" 
-                    ref={fileInputRef} 
-                    className="hidden" 
-                    accept=".csv"
-                    onChange={handleFileChange}
-                  />
+            <div className="flex items-center w-full p-2 pl-3 gap-2">
+              
+              {/* Left Action Buttons (Plus & Search) */}
+              <div className="flex items-center gap-1">
+                {/* File Upload Trigger */}
+                {onFileSelect && (
+                  <>
+                    <input 
+                      type="file" 
+                      ref={fileInputRef} 
+                      className="hidden" 
+                      // ✅ Updated to accept Images + Docs
+                      accept=".csv,.pdf,.txt,.json,.md,image/*"
+                      onChange={handleFileChange}
+                    />
+                    <Button 
+                      variant="ghost" 
+                      size="icon" 
+                      className={cn(
+                        "rounded-full text-muted-foreground hover:text-foreground hover:bg-background transition-colors flex-shrink-0",
+                        variant === "docked" ? "h-8 w-8" : "h-8 w-8"
+                      )}
+                      onClick={(e) => { e.stopPropagation(); fileInputRef.current?.click(); }}
+                      title="Add file or image"
+                      disabled={isLoading}
+                    >
+                      <Plus className="h-5 w-5" />
+                    </Button>
+                  </>
+                )}
+
+                {/* Web Search Toggle */}
+                {onWebSearchToggle && (
                   <Button 
                     variant="ghost" 
                     size="icon" 
                     className={cn(
-                      "rounded-full text-muted-foreground hover:text-primary hover:bg-primary/10 transition-colors flex-shrink-0",
-                      variant === "docked" ? "h-9 w-9" : "h-8 w-8"
+                      "rounded-full transition-all duration-200 flex-shrink-0",
+                      variant === "docked" ? "h-8 w-8" : "h-8 w-8",
+                      isWebSearchEnabled 
+                        ? "text-blue-500 bg-blue-500/10 hover:bg-blue-500/20" 
+                        : "text-muted-foreground hover:text-foreground hover:bg-background"
                     )}
-                    onClick={(e) => { e.stopPropagation(); fileInputRef.current?.click(); }}
-                    title="Attach file"
+                    onClick={(e) => { e.stopPropagation(); onWebSearchToggle(); }}
+                    title="Search the web"
                     disabled={isLoading}
                   >
-                    <Paperclip className={cn(selectedFile ? "h-4 w-4 text-primary" : "h-5 w-5")} />
+                    <Globe className="h-4 w-4" />
                   </Button>
-                </>
-              )}
+                )}
+              </div>
 
               {/* Text Input */}
               <div className="flex-1 flex items-center min-w-0">
-                {showCount && (
-                  <span className="text-xs text-muted-foreground mr-2 whitespace-nowrap hidden sm:inline-block">
-                    {showCount}
-                  </span>
-                )}
-                
                 <input
                   ref={inputRef}
                   type="text"
-                  placeholder={selectedFile ? "Add a message about this file..." : placeholder}
+                  placeholder={
+                    selectedFile 
+                      ? "Ask about this file..." 
+                      : isWebSearchEnabled 
+                        ? "Ask anything (Web Search Active)..." 
+                        : placeholder
+                  }
                   value={currentValue}
                   onChange={handleChange}
                   onKeyDown={handleKeyDown}
@@ -251,19 +267,11 @@ export const ChatInput = ({
                   onBlur={handleBlur}
                   disabled={isLoading}
                   className={cn(
-                    "flex-1 bg-transparent border-0 outline-none text-sm placeholder:text-muted-foreground/50 w-full",
-                    variant === "docked" ? "h-10 text-base" : "h-full"
+                    "flex-1 bg-transparent border-0 outline-none text-sm placeholder:text-muted-foreground/60 w-full px-2",
+                    variant === "docked" ? "h-12 text-base" : "h-full"
                   )}
                 />
               </div>
-              
-              {/* Pagination (Optional) */}
-              {showPagination && (
-                <div className="flex items-center gap-2 flex-shrink-0 mx-2">
-                  <button onClick={onPrevious} className="text-xs text-muted-foreground hover:text-foreground px-2 py-1">Prev</button>
-                  <button onClick={onNext} className="text-xs text-muted-foreground hover:text-foreground px-2 py-1">Next</button>
-                </div>
-              )}
 
               {/* Send Button */}
               {!showPagination && (
@@ -272,9 +280,9 @@ export const ChatInput = ({
                   className={cn(
                     "rounded-full flex-shrink-0 transition-all duration-300",
                     (hasContent || isLoading)
-                      ? "scale-100 opacity-100 rotate-0 bg-primary text-primary-foreground shadow-md hover:scale-105" 
-                      : "scale-90 opacity-50 bg-muted text-muted-foreground",
-                    variant === "docked" ? "h-9 w-9" : "h-8 w-8"
+                      ? "scale-100 opacity-100 rotate-0 bg-primary text-primary-foreground shadow-sm hover:opacity-90" 
+                      : "scale-90 opacity-0 w-0 p-0 overflow-hidden", // Hide completely when empty like Gemini
+                    variant === "docked" ? "h-8 w-8 mr-1" : "h-8 w-8"
                   )}
                   onClick={handleSend}
                   disabled={(!hasContent && !selectedFile) || isLoading}
@@ -286,18 +294,6 @@ export const ChatInput = ({
           </div>
         )}
       </div>
-      
-      {/* Helper Text (Floating Only) */}
-      {variant === "floating" && (
-        <div 
-          className={cn(
-            "absolute -bottom-6 left-0 right-0 text-center text-[10px] text-muted-foreground/60 transition-all duration-500",
-            isExpanded ? "opacity-100 translate-y-0" : "opacity-0 -translate-y-4"
-          )}
-        >
-          AI can make mistakes. Check important info.
-        </div>
-      )}
     </div>
   );
 };
