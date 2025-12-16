@@ -1,48 +1,61 @@
-// frontend/src/lib/api.ts
+// frontend/src/services/api.ts
 import { supabase } from "@/integrations/supabase/client";
 
-// --- Configuration ---
-const API_BASE_URL = import.meta.env.VITE_API_URL || "http://localhost:8000/api/v1";
+// ------------------------------------------------------------------
+// Configuration
+// ------------------------------------------------------------------
+const API_BASE_URL =
+  import.meta.env.VITE_API_URL || "http://localhost:8000/api/v1";
 
-// --- Type Definitions ---
+// ------------------------------------------------------------------
+// Type Definitions
+// ------------------------------------------------------------------
 
-// 1. Trades
+// Trades
 export type TradeDirection = "LONG" | "SHORT";
-export type TradeStatus = "OPEN" | "CLOSED" | "PENDING" | "CANCELED";
+export type TradeStatus = "OPEN" | "CLOSED";
 export type InstrumentType = "STOCK" | "CRYPTO" | "FOREX" | "FUTURES";
 
 export interface Trade {
   id: string;
   user_id: string;
+
   symbol: string;
   instrument_type: InstrumentType;
   direction: TradeDirection;
   status: TradeStatus;
+
   entry_price: number;
   exit_price?: number;
   quantity: number;
-  entry_time: string; // ISO String
-  exit_time?: string; // ISO String
+
+  entry_time: string;
+  exit_time?: string;
+
   fees?: number;
   stop_loss?: number;
   target?: number;
   pnl?: number;
 
   // Content
-  notes?: string;      // maps to 'encrypted_notes' on backend (plain text now)
+  notes?: string;
   raw_notes?: string;
   tags?: string[];
 
-  // Screenshots stored as URLs (Supabase Storage)
-  screenshots?: string[];
+  /**
+   * IMPORTANT:
+   * This is NOT an array.
+   * Backend stores screenshots separately in storage.
+   * This field is intentionally nullable and opaque.
+   */
+  encrypted_screenshots?: string | null;
 
-  // Metadata & Strategy
   metadata?: Record<string, any>;
   strategy_id?: string;
   created_at: string;
 }
 
-// 2. Pagination Wrapper
+// Pagination
 export interface PaginatedResponse<T> {
   data: T[];
   total: number;
@@ -50,7 +63,7 @@ export interface PaginatedResponse<T> {
   size: number;
 }
 
-// 3. Strategies
+// Strategies
 export interface Strategy {
   id: string;
   name: string;
@@ -59,10 +72,12 @@ export interface Strategy {
   style?: string;
   instrument_types?: InstrumentType[];
   rules?: Record<string, string[]>;
+  track_missed_trades: boolean;
   created_at: string;
+  updated_at?: string;
 }
 
-// 4. Chat / AI
+// Chat / AI
 export interface ChatMessage {
   id?: string;
   role: "user" | "assistant" | "system";
@@ -80,7 +95,13 @@ export interface UploadResponse {
   message: string;
 }
 
-// 5. Brokers
+export interface ChatSession {
+  id: string;
+  topic: string;
+  created_at: string;
+}
+
+// Brokers
 export interface BrokerAccount {
   id: string;
   broker_name: string;
@@ -90,7 +111,7 @@ export interface BrokerAccount {
   created_at: string;
 }
 
-// 6. News / Research
+// News
 export interface NewsSource {
   title: string;
   url: string;
@@ -103,31 +124,40 @@ export interface NewsResult {
   related_questions: string[];
 }
 
-// Upload response for screenshot endpoint
+// Screenshot types
 export interface ScreenshotUploadResponse {
-  url: string;
+  success: boolean;
 }
 
-// --- Core Request Wrapper ---
-async function request<T>(endpoint: string, options: RequestInit = {}): Promise<T> {
-  const { data: { session } } = await supabase.auth.getSession();
-  const token = session?.access_token;
+export interface TradeScreenshot {
+  url: string;
+  name?: string;
+  uploaded_at?: string;
+}
 
-  if (!token) {
-    throw new Error("User not authenticated");
-  }
+// ------------------------------------------------------------------
+// Core Request Wrapper
+// ------------------------------------------------------------------
+async function request<T>(
+  endpoint: string,
+  options: RequestInit = {}
+): Promise<T> {
+  const {
+    data: { session },
+  } = await supabase.auth.getSession();
+
+  const token = session?.access_token;
+  if (!token) throw new Error("User not authenticated");
 
   const isFormData = options.body instanceof FormData;
+
   const headers: HeadersInit = {
-    "Authorization": `Bearer ${token}`,
+    Authorization: `Bearer ${token}`,
     ...(options.headers || {}),
   };
 
   if (!isFormData) {
-    Object.assign(headers, { "Content-Type": "application/json" });
-  } else {
-    // If body is FormData, do not set Content-Type; browser will set boundary
-    if ("Content-Type" in (headers as any)) delete (headers as any)["Content-Type"];
+    headers["Content-Type"] = "application/json";
   }
 
   const response = await fetch(`${API_BASE_URL}${endpoint}`, {
@@ -136,27 +166,14 @@ async function request<T>(endpoint: string, options: RequestInit = {}): Promise<
   });
 
   if (!response.ok) {
-    let errorMessage = "API Request Failed";
+    let message = "API Request Failed";
     try {
-      const errorData = await response.json();
-      if (response.status === 422 && errorData.detail) {
-        // Pydantic validation style: detail may be list
-        const detail = Array.isArray(errorData.detail)
-          ? errorData.detail.map((e: any) => {
-              if (e.loc && e.msg) {
-                return `${e.loc.join(".")} ${e.msg}`;
-              }
-              return JSON.stringify(e);
-            }).join(", ")
-          : errorData.detail;
-        errorMessage = `Validation Error: ${detail}`;
-      } else {
-        errorMessage = errorData.detail || errorMessage;
-      }
-    } catch (e) {
-      errorMessage = `HTTP Error ${response.status}`;
+      const err = await response.json();
+      message = err?.detail || message;
+    } catch {
+      message = `HTTP ${response.status}`;
     }
-    throw new Error(errorMessage);
+    throw new Error(message);
   }
 
   if (response.status === 204) {
@@ -166,96 +183,176 @@ async function request<T>(endpoint: string, options: RequestInit = {}): Promise<
   return response.json();
 }
 
-// --- API Modules ---
-
+// ------------------------------------------------------------------
+// API Modules
+// ------------------------------------------------------------------
 export const api = {
-  // 1. Trades Module
+  // --------------------------------------------------------------
+  // Trades
+  // --------------------------------------------------------------
   trades: {
     getAll: (page = 1, limit = 20, symbol?: string) => {
       const params = new URLSearchParams({
-        page: page.toString(),
-        limit: limit.toString(),
+        page: String(page),
+        limit: String(limit),
       });
       if (symbol) params.append("symbol", symbol);
-      return request<PaginatedResponse<Trade>>(`/trades/?${params.toString()}`);
+
+      return request<PaginatedResponse<Trade>>(
+        `/trades/?${params.toString()}`
+      );
     },
 
     getOne: (id: string) => request<Trade>(`/trades/${id}`),
 
-    create: (tradeData: Partial<Trade>) =>
+    create: (data: Partial<Trade>) =>
       request<Trade>("/trades/", {
         method: "POST",
-        body: JSON.stringify(tradeData),
+        body: JSON.stringify(data),
       }),
 
-    update: (id: string, updates: Partial<Trade>) =>
+    update: (id: string, data: Partial<Trade>) =>
       request<Trade>(`/trades/${id}`, {
         method: "PUT",
-        body: JSON.stringify(updates),
+        body: JSON.stringify(data),
       }),
 
     delete: (id: string) =>
-      request<void>(`/trades/${id}`, {
-        method: "DELETE",
-      }),
+      request<void>(`/trades/${id}`, { method: "DELETE" }),
 
-    // Upload single screenshot file to backend -> Supabase Storage
-    uploadScreenshot: (file: File) => {
-      const formData = new FormData();
-      formData.append("file", file);
-      return request<ScreenshotUploadResponse>("/trades/uploads/trade-screenshot", {
-        method: "POST",
-        body: formData,
-      });
+    /**
+     * Screenshot upload
+     * - tradeId OPTIONAL (supports pre-trade uploads)
+     */
+    uploadScreenshot: (file: File, tradeId?: string) => {
+      const form = new FormData();
+      form.append("file", file);
+
+      const q = tradeId ? `?trade_id=${tradeId}` : "";
+
+      return request<ScreenshotUploadResponse>(
+        `/trades/uploads/trade-screenshot${q}`,
+        {
+          method: "POST",
+          body: form,
+        }
+      );
     },
+
+    /**
+     * Fetch screenshots for a trade
+     */
+    getScreenshots: (tradeId: string) =>
+      request<{ files: TradeScreenshot[] }>(
+        `/trades/${tradeId}/screenshots`
+      ),
   },
 
-  // 2. Strategies Module
+  // --------------------------------------------------------------
+  // Strategies
+  // --------------------------------------------------------------
   strategies: {
     getAll: () => request<Strategy[]>("/strategies/"),
+    getOne: (id: string) => request<Strategy>(`/strategies/${id}`),
     create: (data: Partial<Strategy>) =>
-      request<Strategy>("/strategies/", { method: "POST", body: JSON.stringify(data) }),
+      request<Strategy>("/strategies/", {
+        method: "POST",
+        body: JSON.stringify(data),
+      }),
     update: (id: string, data: Partial<Strategy>) =>
-      request<Strategy>(`/strategies/${id}`, { method: "PATCH", body: JSON.stringify(data) }),
-    delete: (id: string) => request<void>(`/strategies/${id}`, { method: "DELETE" }),
+      request<Strategy>(`/strategies/${id}`, {
+        method: "PATCH",
+        body: JSON.stringify(data),
+      }),
+    delete: (id: string) =>
+      request<void>(`/strategies/${id}`, { method: "DELETE" }),
   },
 
-  // 3. AI & Chat Module
+  // --------------------------------------------------------------
+  // AI / Chat
+  // --------------------------------------------------------------
   ai: {
-    getSessions: () => request<{ id: string; topic: string }[]>("/chat/sessions"),
-    deleteSession: (id: string) => request<void>(`/chat/sessions/${id}`, { method: "DELETE" }),
-    getHistory: (sessionId: string) => request<ChatMessage[]>(`/chat/${sessionId}/messages`),
+    getSessions: () => request<ChatSession[]>("/chat/sessions"),
+    deleteSession: (id: string) =>
+      request<void>(`/chat/sessions/${id}`, { method: "DELETE" }),
+
+    renameSession: () => Promise.resolve(),
+
+    getHistory: (sessionId: string) =>
+      request<ChatMessage[]>(`/chat/${sessionId}/messages`),
 
     sendMessage: (sessionId: string, message: string, model = "gpt-4-turbo") =>
-      request<{ response: string; session_id: string; tool_call?: any }>("/chat", {
-        method: "POST",
-        body: JSON.stringify({ session_id: sessionId, message, model }),
-      }),
+      request<{ response: string; session_id: string }>(
+        "/chat",
+        {
+          method: "POST",
+          body: JSON.stringify({ session_id: sessionId, message, model }),
+        }
+      ),
 
     uploadFile: (file: File, sessionId: string, message = "") => {
-      const formData = new FormData();
-      formData.append("file", file);
-      formData.append("session_id", sessionId);
-      formData.append("message", message);
-      return request<UploadResponse>("/chat/upload", { method: "POST", body: formData });
+      const form = new FormData();
+      form.append("file", file);
+      form.append("session_id", sessionId);
+      form.append("message", message);
+
+      return request<UploadResponse>("/chat/upload", {
+        method: "POST",
+        body: form,
+      });
     },
 
     confirmImport: (filePath: string, mapping: Record<string, string>, sessionId?: string) =>
-      request<{ status: string; count: number }>("/chat/import-confirm", {
-        method: "POST",
-        body: JSON.stringify({ file_path: filePath, mapping, session_id: sessionId }),
-      }),
+      request<{ status: string; count: number }>(
+        "/chat/import-confirm",
+        {
+          method: "POST",
+          body: JSON.stringify({
+            file_path: filePath,
+            mapping,
+            session_id: sessionId,
+          }),
+        }
+      ),
   },
 
-  // 4. Brokers Module
+  // --------------------------------------------------------------
+  // Brokers
+  // --------------------------------------------------------------
   brokers: {
     getAll: () => request<BrokerAccount[]>("/brokers/"),
-    add: (data: any) => request<BrokerAccount>("/brokers/", { method: "POST", body: JSON.stringify(data) }),
-    delete: (id: string) => request<void>(`/brokers/${id}`, { method: "DELETE" }),
-    sync: (id: string) => request<{ status: string; message: string }>(`/brokers/${id}/sync`, { method: "POST" }),
+
+    add: (data: any) =>
+      request<BrokerAccount>("/brokers/", {
+        method: "POST",
+        body: JSON.stringify(data),
+      }),
+
+    delete: (id: string) =>
+      request<void>(`/brokers/${id}`, { method: "DELETE" }),
+
+    sync: (id: string) =>
+      request<{ status: string; message: string }>(
+        `/brokers/${id}/sync`,
+        { method: "POST" }
+      ),
+
+    getDhanAuthUrl: () =>
+      request<{ url: string }>("/brokers/dhan/auth-url"),
+
+    connectDhan: (tokenId: string, state: string) =>
+      request<{ status: string; broker_id: string }>(
+        "/brokers/dhan/connect",
+        {
+          method: "POST",
+          body: JSON.stringify({ tokenId, state }),
+        }
+      ),
   },
 
-  // 5. News / Perplexity Module
+  // --------------------------------------------------------------
+  // News
+  // --------------------------------------------------------------
   news: {
     search: (query: string) =>
       request<NewsResult>("/news/search", {
@@ -264,14 +361,20 @@ export const api = {
       }),
   },
 
-  // 6. Legacy Import (Optional wrapper)
+  // --------------------------------------------------------------
+  // Legacy Import
+  // --------------------------------------------------------------
   import: {
     uploadCsv: (file: File) => {
-      const formData = new FormData();
-      formData.append("file", file);
-      formData.append("session_id", "legacy-import");
-      formData.append("message", "Manual CSV Import");
-      return request<UploadResponse>("/chat/upload", { method: "POST", body: formData });
+      const form = new FormData();
+      form.append("file", file);
+      form.append("session_id", "legacy-import");
+      form.append("message", "Manual CSV Import");
+
+      return request<UploadResponse>("/chat/upload", {
+        method: "POST",
+        body: form,
+      });
     },
   },
 };

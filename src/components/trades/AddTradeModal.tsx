@@ -1,5 +1,5 @@
 // frontend/src/components/trades/AddTradeModal.tsx
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
@@ -41,14 +41,8 @@ import {
 import { useTrades } from "@/hooks/use-trades";
 import { useStrategies } from "@/hooks/use-strategies";
 import { cn } from "@/lib/utils";
-
-/**
- * AddTradeModal with screenshots upload
- *
- * Notes:
- * - uploadTradeScreenshots() is a small helper that posts files to an upload endpoint.
- *   Replace with your Supabase/S3 helper as needed.
- */
+import { api } from "@/services/api";
+import { useToast } from "@/hooks/use-toast";
 
 /* -------------------- Schema -------------------- */
 // Use preprocessors to convert datetime-local string -> Date
@@ -130,59 +124,43 @@ interface Props {
   onOpenChange: (open: boolean) => void;
 }
 
-/* -------------------- Upload helper -------------------- */
+/* -------------------- Upload Helper (UPDATED) -------------------- */
 /**
- * Replace this with your real upload logic (Supabase / S3 / server-side endpoint).
- * Expected behaviour: for each File, return an object { url: string }.
+ * Upload screenshots for a given tradeId using backend endpoint.
+ * After uploading files, fetches signed URLs and returns them.
  *
- * Example Supabase approach (conceptual):
- *   const { data, error } = await supabase.storage.from('trade-screenshots').upload(path, file, { upsert: false });
- *   const url = supabase.storage.from('trade-screenshots').getPublicUrl(path).publicURL;
- *
- * This helper calls an example endpoint POST /api/uploads/trade-screenshot which should return { url } JSON.
+ * Throws if uploading fails.
  */
-async function uploadTradeScreenshots(files: File[]): Promise<string[]> {
+async function uploadTradeScreenshotsAndGetUrls(tradeId: string, files: File[]): Promise<string[]> {
   if (!files || files.length === 0) return [];
 
-  const uploadedUrls: string[] = [];
-
-  // Sequential upload is simple and reliable. If you want concurrency, implement Promise.all with attention to rate limits.
+  // Upload each file (sequential to keep it simple and avoid race conditions)
   for (const file of files) {
-    // Minimal client-side validation (server must re-validate)
     if (!(file instanceof File)) continue;
-
-    const fd = new FormData();
-    fd.append("file", file);
-    // optional metadata
-    // fd.append("purpose", "trade_screenshot");
-
-    // Example endpoint - implement server side to accept multipart/form-data and respond with JSON { url: string }
-    const res = await fetch("/api/uploads/trade-screenshot", {
-      method: "POST",
-      body: fd,
-    });
-
-    if (!res.ok) {
-      // You may want to surface the error in UI instead of throwing
-      throw new Error("Failed to upload screenshot");
+    const resp = await api.trades.uploadScreenshot(tradeId, file);
+    if (!resp || !resp.success) {
+      throw new Error(`Upload failed for ${file.name}`);
     }
-
-    const body = await res.json();
-    // Expect { url: string }
-    if (body?.url) uploadedUrls.push(body.url);
   }
 
-  return uploadedUrls;
+  // After upload finishes, fetch signed URLs for the trade
+  const signed = await api.trades.getScreenshots(tradeId);
+  // signed.files is expected to be array of { url, uploaded_at }
+  return (signed.files || []).map((f: any) => f.url).filter(Boolean);
 }
 
 /* -------------------- Component -------------------- */
 export const AddTradeModal = ({ open, onOpenChange }: Props) => {
   const { createTrade } = useTrades();
   const { strategies } = useStrategies();
+  const { toast } = useToast();
+
   const [showAdvanced, setShowAdvanced] = useState(false);
 
   // Preview URLs for thumbnails (revoke on change)
   const [previewUrls, setPreviewUrls] = useState<string[]>([]);
+  // Signed URLs after upload (optional, for immediate UI use)
+  const [signedUrls, setSignedUrls] = useState<string[]>([]);
 
   // Defaults
   const now = new Date();
@@ -225,6 +203,7 @@ export const AddTradeModal = ({ open, onOpenChange }: Props) => {
       setShowAdvanced(false);
       previewUrls.forEach((u) => URL.revokeObjectURL(u));
       setPreviewUrls([]);
+      setSignedUrls([]);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open]);
@@ -285,8 +264,8 @@ export const AddTradeModal = ({ open, onOpenChange }: Props) => {
     const valid: File[] = [];
     for (const f of candidates) {
       if (f.size > MAX_FILE_SIZE) {
-        // Optionally show toast or form error; here we ignore oversize files
-        console.warn(`File ${f.name} too large, skipped`);
+        // show toast for oversize file
+        toast({ title: "File too large", description: `${f.name} exceeds ${MAX_FILE_SIZE / (1024 * 1024)}MB and was skipped`, variant: "destructive" });
         continue;
       }
       valid.push(f);
@@ -310,35 +289,63 @@ export const AddTradeModal = ({ open, onOpenChange }: Props) => {
     form.setValue("screenshots", copy);
   };
 
+  // submission state covering both create + uploads
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
   const onSubmit = async (values: FormValues) => {
-    // upload screenshots first, if any
-    let screenshotUrls: string[] = [];
-    const filesToUpload: File[] = (values.screenshots as any) || [];
+    setIsSubmitting(true);
+    try {
+      // Build payload for trade creation (do NOT include screenshots here - backend will manage attachments)
+      const entryIso = (values.entry_datetime as unknown as Date).toISOString();
+      const exitIso = values.exit_datetime ? (values.exit_datetime as unknown as Date).toISOString() : undefined;
 
-    if (filesToUpload.length) {
-      try {
-        screenshotUrls = await uploadTradeScreenshots(filesToUpload);
-      } catch (err) {
-        // Handle upload failure: show error to user, abort submit, or continue without screenshots.
-        // Here we re-throw to prevent saving incomplete trade (adapt as you want).
-        console.error(err);
-        throw err;
+      const payload: any = {
+        symbol: values.symbol,
+        instrument_type: values.instrument_type,
+        direction: values.direction,
+        status: values.status,
+        entry_price: values.entry_price,
+        quantity: values.quantity,
+        entry_time: entryIso,
+        fees: values.fees || 0,
+        stop_loss: values.stop_loss,
+        target: values.target,
+        exit_price: values.exit_price,
+        exit_time: exitIso,
+        strategy_id: values.strategy_id === "none" ? undefined : values.strategy_id,
+        notes: values.notes || undefined,
+      };
+
+      // 1) Create trade
+      const created = await createTrade.mutateAsync(payload);
+
+      // 2) If there are screenshots, upload them now (backend attaches to the trade)
+      const filesToUpload: File[] = (values.screenshots as any) || [];
+      if (filesToUpload.length > 0) {
+        try {
+          const urls = await uploadTradeScreenshotsAndGetUrls(created.id, filesToUpload);
+          setSignedUrls(urls);
+          toast({ title: "Screenshots uploaded", description: `${urls.length} files attached`, variant: "default" });
+        } catch (uploadErr: any) {
+          // Inform user that trade was created but screenshots failed
+          console.error("Screenshot upload error:", uploadErr);
+          toast({
+            title: "Partial success",
+            description: `Trade created but screenshot upload failed: ${String(uploadErr?.message || uploadErr)}`,
+            variant: "destructive",
+          });
+          // do not throw further — trade is created
+        }
       }
+
+      toast({ title: "Trade saved", description: "Your trade was logged successfully." });
+      onOpenChange(false);
+    } catch (err: any) {
+      console.error("Failed to create trade:", err);
+      toast({ title: "Error", description: err?.message || "Failed to save trade", variant: "destructive" });
+    } finally {
+      setIsSubmitting(false);
     }
-
-    const entryIso = (values.entry_datetime as unknown as Date).toISOString();
-    const exitIso = values.exit_datetime ? (values.exit_datetime as unknown as Date).toISOString() : undefined;
-
-    // Build payload. Keep enums intact; backend should accept the fields you need.
-    await createTrade.mutateAsync({
-      ...values,
-      entry_time: entryIso,
-      exit_time: exitIso,
-      strategy_id: values.strategy_id === "none" ? undefined : values.strategy_id,
-      screenshots: screenshotUrls, // array of uploaded URLs
-    });
-
-    onOpenChange(false);
   };
 
   return (
@@ -794,6 +801,20 @@ export const AddTradeModal = ({ open, onOpenChange }: Props) => {
                                 ))}
                               </div>
                             )}
+
+                            {/* Signed URLs (if upload completed in same modal) */}
+                            {signedUrls.length > 0 && (
+                              <div className="mt-3">
+                                <div className="text-xs mb-2 text-muted-foreground">Attached screenshots</div>
+                                <div className="flex gap-2 flex-wrap">
+                                  {signedUrls.map((u, i) => (
+                                    <a key={i} href={u} target="_blank" rel="noreferrer" className="text-xs underline">
+                                      View {i + 1}
+                                    </a>
+                                  ))}
+                                </div>
+                              </div>
+                            )}
                           </div>
                         </FormControl>
                         <FormMessage />
@@ -807,11 +828,11 @@ export const AddTradeModal = ({ open, onOpenChange }: Props) => {
             {/* Footer */}
             <DialogFooter className="pt-4">
               <div className="w-full flex flex-col sm:flex-row sm:justify-end gap-2">
-                <Button type="button" variant="ghost" onClick={() => onOpenChange(false)} className="w-full sm:w-auto">
+                <Button type="button" variant="ghost" onClick={() => onOpenChange(false)} className="w-full sm:w-auto" disabled={isSubmitting}>
                   Cancel
                 </Button>
-                <Button type="submit" className="min-w-[120px] w-full sm:w-auto" disabled={createTrade.isPending}>
-                  {createTrade.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : "Log Trade"}
+                <Button type="submit" className="min-w-[120px] w-full sm:w-auto" disabled={isSubmitting}>
+                  {isSubmitting ? <Loader2 className="w-4 h-4 animate-spin" /> : "Log Trade"}
                 </Button>
               </div>
             </DialogFooter>

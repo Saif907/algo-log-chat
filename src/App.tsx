@@ -6,20 +6,21 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { Loader2 } from "lucide-react";
+import { ErrorBoundary } from "react-error-boundary"; // ✅ Added Import
 
 // Components
 import { Layout } from "./components/Layout";
 import { ThemeProvider } from "./components/ThemeProvider";
 import { AuthProvider } from "./contexts/AuthContext";
 import { ProtectedRoute } from "./components/ProtectedRoute";
+import { ErrorFallback } from "./components/ErrorFallback"; // ✅ Added Import
 
 // Eagerly loaded pages (Critical for startup)
 import { Auth } from "./pages/Auth";
 import Landing from "./pages/Landing";
 import NotFound from "./pages/NotFound";
 
-// Lazy Loaded Pages (Performance Optimization)
-// Using named exports where applicable
+// Lazy Loaded Pages
 const Dashboard = lazy(() => import("./pages/Dashboard").then(m => ({ default: m.Dashboard })));
 const AIChat = lazy(() => import("./pages/AIChat").then(m => ({ default: m.AIChat })));
 const Markets = lazy(() => import("./pages/Markets").then(m => ({ default: m.Markets })));
@@ -44,7 +45,7 @@ const Appearance = lazy(() => import("./pages/settings/Appearance"));
 const APIKeys = lazy(() => import("./pages/settings/APIKeys"));
 const About = lazy(() => import("./pages/settings/About"));
 
-// Legal pages (Can remain eager or lazy depending on traffic, keeping eager for simplicity if text-heavy/small)
+// Legal pages
 import Privacy from "./pages/legal/Privacy";
 import Terms from "./pages/legal/Terms";
 import Refund from "./pages/legal/Refund";
@@ -81,59 +82,66 @@ const App = () => (
           <Toaster />
           <Sonner />
           <BrowserRouter>
-            <Suspense fallback={<PageLoader />}>
-              <Routes>
-                {/* Landing Page - Default Route */}
-                <Route path="/" element={<Landing />} />
-                <Route path="/auth" element={<Auth />} />
-              
-                {/* Legal Pages (Public) */}
-                <Route path="/legal/privacy" element={<Privacy />} />
-                <Route path="/legal/terms" element={<Terms />} />
-                <Route path="/legal/refund" element={<Refund />} />
-                <Route path="/legal/cancellation" element={<Cancellation />} />
-                <Route path="/legal/shipping" element={<Shipping />} />
-                <Route path="/legal/cookies" element={<Cookies />} />
-                <Route path="/legal/disclaimer" element={<Disclaimer />} />
-                <Route path="/legal/data-protection" element={<DataProtection />} />
-                <Route path="/legal/acceptable-use" element={<AcceptableUse />} />
-                <Route path="/legal/community-guidelines" element={<CommunityGuidelines />} />
-                <Route path="/legal/billing-policy" element={<BillingPolicy />} />
+            {/* ✅ Error Boundary wraps the main Routing/Suspense logic */}
+            <ErrorBoundary 
+              FallbackComponent={ErrorFallback}
+              onReset={() => {
+                // Optional: Reset query cache on error retry to clear bad state
+                // queryClient.invalidateQueries(); 
+                window.location.reload(); // Hard reload is usually safest for global errors
+              }}
+            >
+              <Suspense fallback={<PageLoader />}>
+                <Routes>
+                  {/* Landing Page - Default Route */}
+                  <Route path="/" element={<Landing />} />
+                  <Route path="/auth" element={<Auth />} />
                 
-                {/* Protected Main App Routes */}
-                <Route path="/dashboard" element={<ProtectedRoute><Layout><Dashboard /></Layout></ProtectedRoute>} />
-                <Route path="/markets" element={<ProtectedRoute><Layout><Markets /></Layout></ProtectedRoute>} />
-                <Route path="/trades" element={<ProtectedRoute><Layout><Trades /></Layout></ProtectedRoute>} />
-                <Route path="/trades/:id" element={<ProtectedRoute><Layout><TradeDetail /></Layout></ProtectedRoute>} />
-                <Route path="/strategies" element={<ProtectedRoute><Layout><Strategies /></Layout></ProtectedRoute>} />
-                <Route path="/strategies/:id" element={<ProtectedRoute><Layout><StrategyDetail /></Layout></ProtectedRoute>} />
-                <Route path="/calendar" element={<ProtectedRoute><Layout><CalendarPage /></Layout></ProtectedRoute>} />
-                <Route path="/analytics" element={<ProtectedRoute><Layout><Analytics /></Layout></ProtectedRoute>} />
-                
-                {/* ✅ Secure AI Chat Route */}
-                <Route path="/ai-chat" element={<ProtectedRoute><Layout><AIChat /></Layout></ProtectedRoute>} />
-                
-                {/* Protected Settings Routes */}
-                <Route path="/settings" element={<ProtectedRoute><Profile /></ProtectedRoute>} />
-                <Route path="/settings/profile" element={<ProtectedRoute><Profile /></ProtectedRoute>} />
-                <Route path="/settings/accounts" element={<ProtectedRoute><AccountsBrokers /></ProtectedRoute>} />
-                <Route path="/settings/trading" element={<ProtectedRoute><TradingPreferences /></ProtectedRoute>} />
-                <Route path="/settings/journal" element={<ProtectedRoute><JournalSettings /></ProtectedRoute>} />
-                <Route path="/settings/ai" element={<ProtectedRoute><AISettings /></ProtectedRoute>} />
-                <Route path="/settings/notifications" element={<ProtectedRoute><Notifications /></ProtectedRoute>} />
-                
-                {/* ✅ Renamed for clarity: Data Import/Export */}
-                <Route path="/settings/data-import" element={<ProtectedRoute><DataImport /></ProtectedRoute>} />
-                
-                <Route path="/settings/billing" element={<ProtectedRoute><Billing /></ProtectedRoute>} />
-                <Route path="/settings/security" element={<ProtectedRoute><Security /></ProtectedRoute>} />
-                <Route path="/settings/appearance" element={<ProtectedRoute><Appearance /></ProtectedRoute>} />
-                <Route path="/settings/api-keys" element={<ProtectedRoute><APIKeys /></ProtectedRoute>} />
-                <Route path="/settings/about" element={<ProtectedRoute><About /></ProtectedRoute>} />
-                
-                <Route path="*" element={<NotFound />} />
-              </Routes>
-            </Suspense>
+                  {/* Legal Pages (Public) */}
+                  <Route path="/legal/privacy" element={<Privacy />} />
+                  <Route path="/legal/terms" element={<Terms />} />
+                  <Route path="/legal/refund" element={<Refund />} />
+                  <Route path="/legal/cancellation" element={<Cancellation />} />
+                  <Route path="/legal/shipping" element={<Shipping />} />
+                  <Route path="/legal/cookies" element={<Cookies />} />
+                  <Route path="/legal/disclaimer" element={<Disclaimer />} />
+                  <Route path="/legal/data-protection" element={<DataProtection />} />
+                  <Route path="/legal/acceptable-use" element={<AcceptableUse />} />
+                  <Route path="/legal/community-guidelines" element={<CommunityGuidelines />} />
+                  <Route path="/legal/billing-policy" element={<BillingPolicy />} />
+                  
+                  {/* Protected Main App Routes */}
+                  <Route path="/dashboard" element={<ProtectedRoute><Layout><Dashboard /></Layout></ProtectedRoute>} />
+                  <Route path="/markets" element={<ProtectedRoute><Layout><Markets /></Layout></ProtectedRoute>} />
+                  <Route path="/trades" element={<ProtectedRoute><Layout><Trades /></Layout></ProtectedRoute>} />
+                  <Route path="/trades/:id" element={<ProtectedRoute><Layout><TradeDetail /></Layout></ProtectedRoute>} />
+                  <Route path="/strategies" element={<ProtectedRoute><Layout><Strategies /></Layout></ProtectedRoute>} />
+                  <Route path="/strategies/:id" element={<ProtectedRoute><Layout><StrategyDetail /></Layout></ProtectedRoute>} />
+                  <Route path="/calendar" element={<ProtectedRoute><Layout><CalendarPage /></Layout></ProtectedRoute>} />
+                  <Route path="/analytics" element={<ProtectedRoute><Layout><Analytics /></Layout></ProtectedRoute>} />
+                  
+                  {/* Secure AI Chat Route */}
+                  <Route path="/ai-chat" element={<ProtectedRoute><Layout><AIChat /></Layout></ProtectedRoute>} />
+                  
+                  {/* Protected Settings Routes */}
+                  <Route path="/settings" element={<ProtectedRoute><Profile /></ProtectedRoute>} />
+                  <Route path="/settings/profile" element={<ProtectedRoute><Profile /></ProtectedRoute>} />
+                  <Route path="/settings/accounts" element={<ProtectedRoute><AccountsBrokers /></ProtectedRoute>} />
+                  <Route path="/settings/trading" element={<ProtectedRoute><TradingPreferences /></ProtectedRoute>} />
+                  <Route path="/settings/journal" element={<ProtectedRoute><JournalSettings /></ProtectedRoute>} />
+                  <Route path="/settings/ai" element={<ProtectedRoute><AISettings /></ProtectedRoute>} />
+                  <Route path="/settings/notifications" element={<ProtectedRoute><Notifications /></ProtectedRoute>} />
+                  <Route path="/settings/data-import" element={<ProtectedRoute><DataImport /></ProtectedRoute>} />
+                  <Route path="/settings/billing" element={<ProtectedRoute><Billing /></ProtectedRoute>} />
+                  <Route path="/settings/security" element={<ProtectedRoute><Security /></ProtectedRoute>} />
+                  <Route path="/settings/appearance" element={<ProtectedRoute><Appearance /></ProtectedRoute>} />
+                  <Route path="/settings/api-keys" element={<ProtectedRoute><APIKeys /></ProtectedRoute>} />
+                  <Route path="/settings/about" element={<ProtectedRoute><About /></ProtectedRoute>} />
+                  
+                  <Route path="*" element={<NotFound />} />
+                </Routes>
+              </Suspense>
+            </ErrorBoundary>
           </BrowserRouter>
         </AuthProvider>
       </TooltipProvider>
