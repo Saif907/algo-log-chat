@@ -8,7 +8,7 @@ import { UserProfileDropdown } from "./UserProfileDropdown";
 
 const mainNav = [
   { title: "Home", icon: Home, url: "/dashboard" },
-  { title: "Markets", icon: TrendingUp, url: "/markets" },
+  // { title: "Markets", icon: TrendingUp, url: "/markets" },
   { title: "Trades", icon: Layers, url: "/trades" },
   { title: "Strategies", icon: BookOpen, url: "/strategies" },
 ];
@@ -64,7 +64,7 @@ export const Sidebar = () => {
               <div className="w-8 h-8 bg-gradient-to-br from-primary to-purple-600 rounded-lg flex items-center justify-center flex-shrink-0">
                 <span className="text-white font-bold text-sm">T</span>
               </div>
-              <span className="font-semibold text-lg whitespace-nowrap">TradeLM</span>
+              <span className="font-semibold text-lg whitespace-nowrap">TradeOmen</span>
             </div>
             <Button
               variant="ghost"
@@ -84,7 +84,7 @@ export const Sidebar = () => {
               <div className="w-8 h-8 bg-gradient-to-br from-primary to-purple-600 rounded-lg flex items-center justify-center flex-shrink-0">
                 <span className="text-white font-bold text-sm">T</span>
               </div>
-              <span className="font-semibold text-lg whitespace-nowrap">TradeLM</span>
+              <span className="font-semibold text-lg whitespace-nowrap">TradeOmen</span>
             </div>
             <Button
               variant="ghost"

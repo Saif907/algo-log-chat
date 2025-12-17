@@ -10,7 +10,7 @@ export const Markets = () => {
         </div>
       </div>
       
-      <ChatInput placeholder="Ask about market data or trading opportunities..." />
+      
     </div>
   );
 };

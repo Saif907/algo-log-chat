@@ -109,14 +109,19 @@ export const TimeAnalysis = ({ rawTrades, hourlyHeatmap }: Props) => {
             <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
             <XAxis dataKey="name" stroke="hsl(var(--muted-foreground))" tick={{ fontSize: 10 }} />
             <YAxis stroke="hsl(var(--muted-foreground))" tick={{ fontSize: 10 }} />
+            
+            {/* ✅ FIXED: Tooltip Colors */}
             <Tooltip 
               cursor={{fill: 'transparent'}}
               contentStyle={{ 
-                backgroundColor: "hsl(var(--card))", 
-                border: "1px solid hsl(var(--border))",
+                backgroundColor: "hsl(var(--popover))", 
+                borderColor: "hsl(var(--border))",
+                color: "hsl(var(--popover-foreground))",
                 borderRadius: "8px"
               }}
+              itemStyle={{ color: 'hsl(var(--popover-foreground))' }}
             />
+            
             <Bar dataKey="value" radius={[4, 4, 0, 0]}>
               {currentData.map((entry, index) => (
                 <Cell

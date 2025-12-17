@@ -375,7 +375,7 @@ export const Strategies = () => {
         </div>
       </div>
       
-      <ChatInput placeholder="Ask about your strategies or trading plans..." />
+      
     </div>
   );
 };

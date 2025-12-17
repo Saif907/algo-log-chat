@@ -47,7 +47,7 @@ const testimonials = [
   {
     name: "Alex Thompson",
     role: "Day Trader",
-    content: "TradeLM transformed my trading. The AI insights helped me identify that I was overtrading on Mondays. My win rate improved by 23%.",
+    content: "TradeOmen transformed my trading. The AI insights helped me identify that I was overtrading on Mondays. My win rate improved by 23%.",
     avatar: "AT"
   },
   {
@@ -115,7 +115,7 @@ export const Landing = () => {
               <div className="w-8 h-8 bg-gradient-to-br from-primary to-purple-600 rounded-lg flex items-center justify-center">
                 <span className="text-white font-bold text-sm">T</span>
               </div>
-              <span className="font-bold text-xl">TradeLM</span>
+              <span className="font-bold text-xl">TradeOmen</span>
             </div>
 
             {/* Desktop Nav */}
@@ -210,7 +210,7 @@ export const Landing = () => {
       <section id="demo" className="py-20 px-4 bg-muted/30">
         <div className="max-w-7xl mx-auto">
           <div className="text-center mb-12">
-            <h2 className="text-3xl sm:text-4xl font-bold mb-4">See TradeLM in Action</h2>
+            <h2 className="text-3xl sm:text-4xl font-bold mb-4">See TradeOmen in Action</h2>
             <p className="text-muted-foreground max-w-2xl mx-auto">
               Watch how traders use our platform to improve their performance
             </p>
@@ -320,7 +320,7 @@ export const Landing = () => {
           <div className="text-center mb-16">
             <Badge variant="outline" className="mb-4">Testimonials</Badge>
             <h2 className="text-3xl sm:text-4xl font-bold mb-4">Loved by Traders Worldwide</h2>
-            <p className="text-muted-foreground">Join thousands of traders who improved their performance with TradeLM</p>
+            <p className="text-muted-foreground">Join thousands of traders who improved their performance with TradeOmen</p>
           </div>
 
           <div className="grid md:grid-cols-3 gap-6">
@@ -402,7 +402,7 @@ export const Landing = () => {
             Ready to Transform Your Trading?
           </h2>
           <p className="text-muted-foreground mb-8 max-w-2xl mx-auto">
-            Join thousands of traders who are already using TradeLM to improve their performance and achieve consistent profitability.
+            Join thousands of traders who are already using TradeOmen to improve their performance and achieve consistent profitability.
           </p>
           <Button size="lg" onClick={() => navigate("/auth")} className="px-8">
             Start Your Free Trial
@@ -420,7 +420,7 @@ export const Landing = () => {
                 <div className="w-8 h-8 bg-gradient-to-br from-primary to-purple-600 rounded-lg flex items-center justify-center">
                   <span className="text-white font-bold text-sm">T</span>
                 </div>
-                <span className="font-bold text-xl">TradeLM</span>
+                <span className="font-bold text-xl">TradeOmen</span>
               </div>
               <p className="text-sm text-muted-foreground mb-4">
                 The AI-powered trading journal that helps you become a better trader.
@@ -453,7 +453,7 @@ export const Landing = () => {
           </div>
           <div className="mt-12 pt-8 border-t border-border flex flex-col sm:flex-row items-center justify-between gap-4">
             <p className="text-sm text-muted-foreground">
-              © {new Date().getFullYear()} TradeLM. All rights reserved.
+              © {new Date().getFullYear()} TradeOmen. All rights reserved.
             </p>
             <div className="flex items-center gap-4">
               <a href="#" className="text-muted-foreground hover:text-foreground">

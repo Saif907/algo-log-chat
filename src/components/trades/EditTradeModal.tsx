@@ -38,7 +38,7 @@ import {
 } from "@/components/ui/alert-dialog";
 
 interface EditTradeModalProps {
-  trade: Trade | null; // The trade being edited
+  trade: Trade | null;
   open: boolean;
   onOpenChange: (open: boolean) => void;
 }
@@ -53,7 +53,7 @@ export const EditTradeModal = ({ trade, open, onOpenChange }: EditTradeModalProp
   const [formData, setFormData] = useState({
     symbol: "",
     instrument_type: "STOCK" as InstrumentType,
-    direction: "Long" as TradeDirection,
+    direction: "LONG" as TradeDirection,
     entry_price: "",
     quantity: "",
     entry_date: new Date(),
@@ -83,17 +83,17 @@ export const EditTradeModal = ({ trade, open, onOpenChange }: EditTradeModalProp
       setFormData({
         symbol: trade.symbol,
         instrument_type: trade.instrument_type || "STOCK",
-        direction: trade.direction,
-        entry_price: trade.entry_price.toString(),
-        quantity: trade.quantity.toString(),
-        entry_date: new Date(trade.entry_time),
+        direction: trade.direction || "LONG",
+        entry_price: trade.entry_price?.toString() || "0",
+        quantity: trade.quantity?.toString() || "0",
+        entry_date: trade.entry_time ? new Date(trade.entry_time) : new Date(),
         
         // Handle optional exit data
         exit_price: trade.exit_price ? trade.exit_price.toString() : "",
         exit_date: trade.exit_time ? new Date(trade.exit_time) : new Date(),
         
-        stop_loss: trade.stop_loss ? trade.stop_loss.toString() : "", // Note: Requires backend support for stop_loss field if not present in Trade type
-        target: trade.target ? trade.target.toString() : "", // Note: Requires backend support for target field
+        stop_loss: trade.stop_loss ? trade.stop_loss.toString() : "",
+        target: trade.target ? trade.target.toString() : "",
         
         strategy_id: trade.strategy_id || "none",
         notes: trade.notes || "",
@@ -114,7 +114,7 @@ export const EditTradeModal = ({ trade, open, onOpenChange }: EditTradeModalProp
       if (isNaN(quantity) || quantity <= 0) throw new Error("Quantity must be positive.");
 
       // Prepare Update Payload
-      const payload: Partial<Trade> = {
+      const payload: any = {
         symbol: formData.symbol.toUpperCase(),
         instrument_type: formData.instrument_type,
         direction: formData.direction,
@@ -124,10 +124,15 @@ export const EditTradeModal = ({ trade, open, onOpenChange }: EditTradeModalProp
         entry_time: formData.entry_date.toISOString(),
         
         // Exit Logic
-        exit_price: isClosed && formData.exit_price ? parseFloat(formData.exit_price) : 0, // Backend might need 0 or null to clear it
-        exit_time: isClosed ? formData.exit_date.toISOString() : undefined, // Undefined usually ignored by patch
+        exit_price: isClosed && formData.exit_price ? parseFloat(formData.exit_price) : null,
+        exit_time: isClosed ? formData.exit_date.toISOString() : null,
         
-        strategy_id: formData.strategy_id === "none" ? undefined : formData.strategy_id, // backend handles null?
+        // Optional Fields
+        stop_loss: formData.stop_loss ? parseFloat(formData.stop_loss) : null,
+        target: formData.target ? parseFloat(formData.target) : null,
+        
+        // Use null to clear the strategy if 'none' is selected
+        strategy_id: formData.strategy_id === "none" ? null : formData.strategy_id,
         notes: formData.notes
       };
 
@@ -136,25 +141,14 @@ export const EditTradeModal = ({ trade, open, onOpenChange }: EditTradeModalProp
         throw new Error("Exit time cannot be before Entry time.");
       }
 
-      return api.trades.create({ ...payload, id: trade.id } as any); // Reuse create? No, need update.
-      // Correction: api.trades.create is POST. We need api.trades.update (PATCH/PUT).
-      // Let's assume api.trades.update exists or use a generic request.
-      // Based on previous files, api.trades doesn't have update explicitly shown in the snippet I generated earlier? 
-      // Checking api.ts snippet... I added `update` to `strategies` but maybe missed `trades.update`.
-      // I will implement the fetch call directly here if needed, or assume I will add it to api.ts next.
-      // Actually, looking at the backend `trades.py`, there is NO update endpoint (PUT/PATCH /trades/{id}).
-      // CRITICAL FINDING: The backend currently only has GET, POST, DELETE for trades. 
-      // I must add the UPDATE endpoint to backend `trades.py` later. For now, I will write the frontend assuming it exists.
-      
-      // Temporary Fix: Since I can't change backend file in this turn, I will just log the error if it fails, 
-      // but strictly speaking, we need to add the endpoint. 
-      // I'll proceed assuming `api.trades.update` will be added.
-      
-      // (Self-correction: I will add the update endpoint to backend in the next turn to make this work).
+      // ✅ Call the correct Update API
       return api.trades.update(trade.id, payload); 
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["trades"] });
+      // Also invalidate single trade query to refresh details page if open
+      if (trade) queryClient.invalidateQueries({ queryKey: ["trade", trade.id] });
+      
       toast({ title: "Success", description: "Trade updated successfully." });
       onOpenChange(false);
     },
@@ -219,12 +213,12 @@ export const EditTradeModal = ({ trade, open, onOpenChange }: EditTradeModalProp
                 value={formData.direction}
                 onValueChange={(val: TradeDirection) => setFormData({ ...formData, direction: val })}
               >
-                <SelectTrigger className={formData.direction === "Long" ? "text-green-600" : "text-red-600"}>
+                <SelectTrigger className={formData.direction === "LONG" ? "text-green-600" : "text-red-600"}>
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="Long">Long 🟢</SelectItem>
-                  <SelectItem value="Short">Short 🔴</SelectItem>
+                  <SelectItem value="LONG">Long 🟢</SelectItem>
+                  <SelectItem value="SHORT">Short 🔴</SelectItem>
                 </SelectContent>
               </Select>
             </div>
@@ -317,6 +311,28 @@ export const EditTradeModal = ({ trade, open, onOpenChange }: EditTradeModalProp
             </div>
           )}
 
+          {/* Risk Management */}
+          <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <Label>Stop Loss</Label>
+              <Input
+                type="number" step="any"
+                value={formData.stop_loss}
+                onChange={(e) => setFormData({ ...formData, stop_loss: e.target.value })}
+                placeholder="Optional"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label>Target</Label>
+              <Input
+                type="number" step="any"
+                value={formData.target}
+                onChange={(e) => setFormData({ ...formData, target: e.target.value })}
+                placeholder="Optional"
+              />
+            </div>
+          </div>
+
           {/* Strategy & Notes */}
           <div className="space-y-2">
             <Label>Strategy</Label>
@@ -324,7 +340,7 @@ export const EditTradeModal = ({ trade, open, onOpenChange }: EditTradeModalProp
               value={formData.strategy_id}
               onValueChange={(val) => setFormData({ ...formData, strategy_id: val })}
             >
-              <SelectTrigger><SelectValue placeholder="Select playbook..." /></SelectTrigger>
+              <SelectTrigger><SelectValue placeholder="Select strategy..." /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="none">No Strategy</SelectItem>
                 {strategies.map((s) => (

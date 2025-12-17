@@ -23,6 +23,12 @@ export const TradeAnalysis = ({ rawTrades, mistakeData, emotionData, tagData, rM
 
   const COLORS = ["hsl(var(--primary))", "hsl(var(--success))", "hsl(var(--destructive))", "hsl(180, 70%, 50%)", "hsl(var(--muted-foreground))"];
 
+  const tooltipStyle = {
+    backgroundColor: "hsl(var(--popover))",
+    borderColor: "hsl(var(--border))",
+    color: "hsl(var(--popover-foreground))"
+  };
+
   return (
     <div className="space-y-4 sm:space-y-6">
       {/* R-Multiple Distribution */}
@@ -33,7 +39,14 @@ export const TradeAnalysis = ({ rawTrades, mistakeData, emotionData, tagData, rM
             <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
             <XAxis dataKey="range" stroke="hsl(var(--muted-foreground))" fontSize={10} />
             <YAxis stroke="hsl(var(--muted-foreground))" fontSize={10} />
-            <Tooltip cursor={{fill: 'transparent'}} contentStyle={{ backgroundColor: "hsl(var(--card))", borderColor: "hsl(var(--border))" }} />
+            
+            {/* ✅ FIXED: Tooltip Colors */}
+            <Tooltip 
+              cursor={{fill: 'transparent'}} 
+              contentStyle={tooltipStyle}
+              itemStyle={{ color: 'hsl(var(--popover-foreground))' }}
+            />
+            
             <Bar dataKey="count" radius={[4, 4, 0, 0]}>
               {rMultipleData.map((entry, index) => (
                 <Cell key={`cell-${index}`} fill={entry.color === "success" ? "hsl(var(--success))" : "hsl(var(--destructive))"} />
@@ -52,7 +65,14 @@ export const TradeAnalysis = ({ rawTrades, mistakeData, emotionData, tagData, rM
               <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
               <XAxis dataKey="x" name="Size" unit="$" stroke="hsl(var(--muted-foreground))" fontSize={10} />
               <YAxis dataKey="y" name="P&L" unit="$" stroke="hsl(var(--muted-foreground))" fontSize={10} />
-              <Tooltip cursor={{strokeDasharray: '3 3'}} contentStyle={{ backgroundColor: "hsl(var(--card))", borderColor: "hsl(var(--border))" }} />
+              
+              {/* ✅ FIXED: Tooltip Colors */}
+              <Tooltip 
+                cursor={{strokeDasharray: '3 3'}} 
+                contentStyle={tooltipStyle}
+                itemStyle={{ color: 'hsl(var(--popover-foreground))' }}
+              />
+              
               <Scatter data={scatterData} fill="hsl(var(--primary))">
                  {scatterData.map((entry, index) => (
                   <Cell key={`cell-${index}`} fill={entry.y >= 0 ? "hsl(var(--success))" : "hsl(var(--destructive))"} />
@@ -72,7 +92,11 @@ export const TradeAnalysis = ({ rawTrades, mistakeData, emotionData, tagData, rM
                   <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
                 ))}
               </Pie>
-              <Tooltip contentStyle={{ backgroundColor: "hsl(var(--card))", borderColor: "hsl(var(--border))" }} />
+              {/* ✅ FIXED: Tooltip Colors */}
+              <Tooltip 
+                contentStyle={tooltipStyle}
+                itemStyle={{ color: 'hsl(var(--popover-foreground))' }}
+              />
             </PieChart>
           </ResponsiveContainer>
           <div className="flex flex-wrap gap-2 justify-center mt-2">

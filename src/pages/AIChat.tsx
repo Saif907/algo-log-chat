@@ -1,12 +1,12 @@
 // frontend/src/pages/AIChat.tsx
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, useMemo } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { 
   Sparkles, Globe, TrendingUp, BarChart, Shield, 
   Plus, ChevronDown, MessageSquare, Trash2, Loader2, User,
-  MoreHorizontal, Pencil, Check, X as XIcon
+  MoreHorizontal, Pencil, Check, X as XIcon, Copy, Clipboard
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -48,6 +48,32 @@ interface OptimisticMessage {
   created_at?: string;
 }
 
+// --- Helper Component for Copy Button ---
+const CopyAction = ({ text, className, iconColor }: { text: string, className?: string, iconColor?: string }) => {
+  const [isCopied, setIsCopied] = useState(false);
+
+  const handleCopy = () => {
+    navigator.clipboard.writeText(text);
+    setIsCopied(true);
+    setTimeout(() => setIsCopied(false), 2000);
+  };
+
+  return (
+    <Button
+      variant="ghost"
+      size="icon"
+      className={cn("h-6 w-6 hover:bg-transparent transition-opacity opacity-50 hover:opacity-100", className)}
+      onClick={handleCopy}
+    >
+      {isCopied ? (
+        <Check className={cn("h-3.5 w-3.5", iconColor || "text-green-500")} />
+      ) : (
+        <Copy className={cn("h-3.5 w-3.5", iconColor || "text-muted-foreground")} />
+      )}
+    </Button>
+  );
+};
+
 const quickActions = [
   { icon: TrendingUp, label: "Log a trade" },
   { icon: BarChart, label: "Analyze my performance" },
@@ -63,7 +89,7 @@ export const AIChat = () => {
   
   // State
   const [currentSessionId, setCurrentSessionId] = useState<string | null>(() => {
-    return localStorage.getItem("tradeLm_activeSessionId");
+    return localStorage.getItem("TradeOmen_activeSessionId");
   });
   const [optimisticMessages, setOptimisticMessages] = useState<OptimisticMessage[]>([]);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
@@ -77,9 +103,12 @@ export const AIChat = () => {
   
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
+  // Memoize plugins to avoid re-renders or crashes
+  const plugins = useMemo(() => [remarkGfm], []);
+
   useEffect(() => {
-    if (currentSessionId) localStorage.setItem("tradeLm_activeSessionId", currentSessionId);
-    else localStorage.removeItem("tradeLm_activeSessionId");
+    if (currentSessionId) localStorage.setItem("TradeOmen_activeSessionId", currentSessionId);
+    else localStorage.removeItem("TradeOmen_activeSessionId");
   }, [currentSessionId]);
 
   // --- Queries ---
@@ -149,11 +178,11 @@ export const AIChat = () => {
 
       if (data.tool_call) {
         const toolMsg: OptimisticMessage = {
-           id: "tool-" + Math.random(),
-           role: "assistant",
-           content: data.response,
-           type: data.tool_call.type, 
-           data: data.tool_call.data
+            id: "tool-" + Math.random(),
+            role: "assistant",
+            content: data.response,
+            type: data.tool_call.type, 
+            data: data.tool_call.data
         };
         queryClient.setQueryData(['chat-history', targetSessionId], (oldData: any[] | undefined) => [...(oldData || []), userMsg]);
         setOptimisticMessages([toolMsg]);
@@ -245,7 +274,7 @@ export const AIChat = () => {
     setInput("");
     setSelectedFile(null);
     setOptimisticMessages([]);
-    localStorage.removeItem("tradeLm_activeSessionId");
+    localStorage.removeItem("TradeOmen_activeSessionId");
     setIsSessionMenuOpen(false);
   };
 
@@ -280,7 +309,7 @@ export const AIChat = () => {
       <div className="sticky top-0 z-40 bg-background/80 backdrop-blur-md border-b border-border px-4 py-3">
         <div className="max-w-3xl mx-auto flex items-center justify-between">
           
-          {/* ✅ Improved Session List Popover */}
+          {/* Session List Popover */}
           <Popover open={isSessionMenuOpen} onOpenChange={setIsSessionMenuOpen}>
             <PopoverTrigger asChild>
               <Button variant="ghost" className="gap-2 pl-2 pr-3 -ml-2 hover:bg-muted/50 rounded-xl transition-all h-10">
@@ -346,7 +375,7 @@ export const AIChat = () => {
                           )}
                         </div>
 
-                        {/* ✅ Hover Menu: Three Dots */}
+                        {/* Hover Menu: Three Dots */}
                         {editingSessionId !== session.id && (
                           <DropdownMenu>
                             <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}>
@@ -379,7 +408,7 @@ export const AIChat = () => {
             </PopoverContent>
           </Popover>
           
-          {/* Global Delete for Current Chat (Legacy/Backup) */}
+          {/* Global Delete for Current Chat */}
           {currentSessionId && (
             <AlertDialog>
               <AlertDialogTrigger asChild>
@@ -414,7 +443,7 @@ export const AIChat = () => {
               </div>
             </div>
             <div>
-              <h1 className="text-3xl sm:text-5xl font-bold mb-2 bg-clip-text text-transparent bg-gradient-to-r from-foreground to-foreground/70">TradeLM AI</h1>
+              <h1 className="text-3xl sm:text-5xl font-bold mb-2 bg-clip-text text-transparent bg-gradient-to-r from-foreground to-foreground/70">TradeOmen AI</h1>
               <p className="text-base sm:text-lg text-muted-foreground">Your intelligent trading companion</p>
             </div>
           </div>
@@ -444,8 +473,10 @@ export const AIChat = () => {
                   )}
                   
                   <div className={cn(
-                    "max-w-[85%] sm:max-w-[75%] rounded-2xl px-4 sm:px-5 py-2.5 sm:py-3 shadow-sm",
-                    message.role === "user" ? "bg-primary text-primary-foreground rounded-tr-sm" : "bg-muted/50 border border-border/50 rounded-tl-sm backdrop-blur-sm"
+                    "relative group",
+                    message.role === "user" 
+                        ? "max-w-[85%] sm:max-w-[75%] rounded-2xl px-4 sm:px-5 py-2.5 sm:py-3 shadow-sm bg-primary text-primary-foreground rounded-tr-sm" 
+                        : "w-full min-w-0 bg-transparent px-0 py-1 shadow-none border-none" 
                   )}>
                     {message.type === "import-confirmation" && message.data ? (
                       <ImportMappingCard 
@@ -458,24 +489,39 @@ export const AIChat = () => {
                         }} 
                       />
                     ) : message.type === "trade-confirmation" && message.data ? (
-                       <TradeConfirmationCard
+                        <TradeConfirmationCard
                           data={message.data}
                           onConfirm={(savedTrade) => handleTradeComplete(savedTrade)}
                           onCancel={() => setOptimisticMessages([])}
-                       />
+                        />
                     ) : message.type === "trade-receipt" && message.data ? (
-                       <div className="w-full max-w-md">
+                        <div className="w-full max-w-md">
                           <div className="flex items-center gap-2 mb-2 text-green-600 dark:text-green-400 px-1">
                              <span className="text-sm font-medium">Successfully Logged</span>
                           </div>
                           <TradeCard trade={message.data} />
-                       </div>
+                        </div>
                     ) : (
-                      <div className="text-sm leading-relaxed">
+                      <div className={cn("leading-7", message.role === "assistant" ? "text-base text-foreground" : "text-sm")}>
                         {message.role === "user" ? (
-                          <div className="whitespace-pre-wrap">{message.content}</div>
+                          <>
+                            <div className="whitespace-pre-wrap">{message.content}</div>
+                            {/* User Copy Button (Inside Bubble, Bottom Right) */}
+                            <div className="absolute -bottom-1 -left-8 opacity-0 group-hover:opacity-100 transition-opacity duration-200">
+                                <CopyAction text={message.content} className="text-muted-foreground hover:text-foreground" />
+                            </div>
+                          </>
                         ) : (
-                          <ReactMarkdown remarkPlugins={[remarkGfm]}>{message.content}</ReactMarkdown>
+                          // Assistant Message
+                          <div className="prose dark:prose-invert max-w-none text-base break-words prose-p:leading-7 prose-li:leading-7">
+                            <ReactMarkdown remarkPlugins={plugins}>
+                              {message.content || ""} 
+                            </ReactMarkdown>
+                            {/* AI Copy Button (Below Text) */}
+                            <div className="mt-2 flex items-center gap-2">
+                               <CopyAction text={message.content} />
+                            </div>
+                          </div>
                         )}
                       </div>
                     )}
@@ -488,7 +534,7 @@ export const AIChat = () => {
                    <div className="w-8 h-8 bg-gradient-to-br from-primary to-purple-600 rounded-full flex items-center justify-center flex-shrink-0 mt-1 shadow-sm">
                       <Sparkles className="h-4 w-4 text-white animate-pulse" />
                    </div>
-                   <div className="bg-muted/50 border border-border/50 rounded-2xl rounded-tl-sm px-5 py-3 flex items-center gap-2">
+                   <div className="bg-transparent px-0 py-2 flex items-center gap-2">
                       <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
                       <span className="text-sm text-muted-foreground font-medium">Thinking...</span>
                    </div>
@@ -517,7 +563,7 @@ export const AIChat = () => {
           onWebSearchToggle={() => setIsWebSearch(!isWebSearch)}
         />
         <div className="text-center mt-2 text-[10px] text-muted-foreground/60">
-           TradeLM can make mistakes. Check important info.
+           TradeOmen can make mistakes. Check important info.
         </div>
       </div>
     </div>

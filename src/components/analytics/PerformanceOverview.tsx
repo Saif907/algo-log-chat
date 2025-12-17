@@ -19,7 +19,6 @@ export const PerformanceOverview = ({ equityData, stats }: Props) => {
 
   return (
     <div className="space-y-4 sm:space-y-6">
-      {/* Main KPI Cards */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
         <Card className="p-4 sm:p-6">
           <p className="text-[10px] sm:text-sm text-muted-foreground mb-0.5 sm:mb-1">TOTAL P&L</p>
@@ -63,7 +62,6 @@ export const PerformanceOverview = ({ equityData, stats }: Props) => {
         </Card>
       </div>
 
-      {/* Equity Curve */}
       <Card className="p-4 sm:p-6">
         <div className="flex items-center justify-between mb-3 sm:mb-4">
           <h3 className="text-xs sm:text-sm font-semibold">EQUITY CURVE</h3>
@@ -79,14 +77,23 @@ export const PerformanceOverview = ({ equityData, stats }: Props) => {
             <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
             <XAxis dataKey="date" stroke="hsl(var(--muted-foreground))" tick={{ fontSize: 10 }} />
             <YAxis stroke="hsl(var(--muted-foreground))" tick={{ fontSize: 10 }} />
-            <Tooltip contentStyle={{ backgroundColor: "hsl(var(--card))", borderColor: "hsl(var(--border))" }} />
+            
+            {/* ✅ FIXED: Tooltip Colors */}
+            <Tooltip 
+              contentStyle={{ 
+                backgroundColor: "hsl(var(--popover))", 
+                borderColor: "hsl(var(--border))",
+                color: "hsl(var(--popover-foreground))"
+              }} 
+              itemStyle={{ color: 'hsl(var(--popover-foreground))' }}
+            />
+            
             <Area type="monotone" dataKey="value" stroke="hsl(var(--primary))" fill="url(#equityGradient)" strokeWidth={2} />
           </AreaChart>
         </ResponsiveContainer>
       </Card>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 sm:gap-4">
-        {/* Key Metrics Grid */}
         <Card className="p-4 sm:p-6">
           <div className="flex items-center justify-between mb-3 sm:mb-4">
             <h3 className="text-xs sm:text-sm font-semibold">KEY METRICS</h3>
@@ -106,7 +113,6 @@ export const PerformanceOverview = ({ equityData, stats }: Props) => {
           </div>
         </Card>
 
-        {/* Trading Summary Grid */}
         <Card className="p-4 sm:p-6">
           <div className="flex items-center justify-between mb-3 sm:mb-4">
             <h3 className="text-xs sm:text-sm font-semibold">TRADING SUMMARY</h3>

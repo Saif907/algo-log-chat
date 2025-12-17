@@ -112,7 +112,7 @@ export const Analytics = () => {
         </Tabs>
       </div>
 
-      <ChatInput placeholder="Ask about your analytics or performance metrics..." />
+      
     </div>
   );
 };

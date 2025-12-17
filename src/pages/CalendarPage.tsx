@@ -414,7 +414,7 @@ export const CalendarPage = () => {
         </SheetContent>
       </Sheet>
 
-      <ChatInput placeholder="Ask about your trading calendar..." />
+      
     </div>
   );
 };

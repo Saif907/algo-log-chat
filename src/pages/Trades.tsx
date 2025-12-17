@@ -15,9 +15,12 @@ import { AddTradeModal } from "@/components/trades/AddTradeModal";
 import { TradeCard } from "@/components/trades/TradeCard";
 import { useTrades } from "@/hooks/use-trades";
 import { Skeleton } from "@/components/ui/skeleton";
+import { api } from "@/services/api"; // Added Import
+import { useToast } from "@/hooks/use-toast"; // Added Import
 
 export const Trades = () => {
   const navigate = useNavigate();
+  const { toast } = useToast(); // Added Hook
   
   // --- Pagination & Filter State ---
   const [page, setPage] = useState(1);
@@ -26,6 +29,7 @@ export const Trades = () => {
   const [activeTab, setActiveTab] = useState("all");
   const [isAddTradeOpen, setIsAddTradeOpen] = useState(false);
   const [filtersOpen, setFiltersOpen] = useState(false);
+  const [isExporting, setIsExporting] = useState(false); // Added State
 
   // Filter State
   const [filterInstrument, setFilterInstrument] = useState("all-instruments");
@@ -33,6 +37,32 @@ export const Trades = () => {
 
   // ✅ Fetch Paginated Data
   const { trades, total, totalPages, isLoading, isFetching } = useTrades(page, pageSize, search);
+
+  // ✅ Handle CSV Export (New Logic)
+  const handleExport = async () => {
+    try {
+      setIsExporting(true);
+      const blob = await api.trades.export();
+      
+      // Create a link and trigger download
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `trades_export_${new Date().toISOString().split('T')[0]}.csv`;
+      document.body.appendChild(a);
+      a.click();
+      
+      // Cleanup
+      window.URL.revokeObjectURL(url);
+      document.body.removeChild(a);
+      
+      toast({ title: "Success", description: "Trades exported successfully." });
+    } catch (error) {
+      toast({ title: "Export Failed", description: "Could not download trades.", variant: "destructive" });
+    } finally {
+      setIsExporting(false);
+    }
+  };
 
   // --- Format Helpers (Restored from Original) ---
   const formatDate = (isoString: string | null) => {
@@ -119,10 +149,21 @@ export const Trades = () => {
               <p className="text-sm sm:text-base text-muted-foreground">Manage and analyze your trading history</p>
             </div>
             <div className="flex gap-2 sm:gap-3">
-              <Button variant="outline" className="flex-1 sm:flex-none">
-                <Download className="h-4 w-4 sm:mr-2" />
+              {/* ✅ Updated Export Button */}
+              <Button 
+                variant="outline" 
+                className="flex-1 sm:flex-none" 
+                onClick={handleExport}
+                disabled={isExporting}
+              >
+                {isExporting ? (
+                  <Loader2 className="h-4 w-4 sm:mr-2 animate-spin" />
+                ) : (
+                  <Download className="h-4 w-4 sm:mr-2" />
+                )}
                 <span className="hidden sm:inline">Export</span>
               </Button>
+
               <Button 
                 className="flex-1 sm:flex-none bg-[#00d4ff] hover:bg-[#00b8e0] text-black"
                 onClick={() => setIsAddTradeOpen(true)}
@@ -205,7 +246,7 @@ export const Trades = () => {
                       <TableHead className="min-w-[80px]">Side</TableHead>
                       <TableHead className="min-w-[120px]">P/L</TableHead>
                       <TableHead className="min-w-[100px]">R-Multiple</TableHead>
-                      <TableHead className="min-w-[140px]">Playbook</TableHead>
+                      <TableHead className="min-w-[140px]">Strategy</TableHead>
                       <TableHead className="min-w-[200px]">Tags</TableHead>
                     </TableRow>
                   </TableHeader>
@@ -362,7 +403,7 @@ export const Trades = () => {
            </div>
       )}
 
-      <ChatInput placeholder="Ask about your trades or trade details..." />
+      
       <AddTradeModal open={isAddTradeOpen} onOpenChange={setIsAddTradeOpen} />
     </div>
   );

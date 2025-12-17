@@ -2,21 +2,13 @@
 import { useEffect, useState, useCallback } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import {
-  LineChart,
-  Line,
-  XAxis,
-  YAxis,
-  CartesianGrid,
-  ResponsiveContainer,
-  ReferenceLine,
-} from "recharts";
-import {
   Edit,
   Trash2,
   Upload,
   ArrowLeft,
   Maximize2,
   ExternalLink,
+  ImageOff,
 } from "lucide-react";
 
 import { Card } from "@/components/ui/card";
@@ -28,15 +20,6 @@ import { useToast } from "@/hooks/use-toast";
 import api from "@/services/api";
 import { EditTradeModal } from "@/components/trades/EditTradeModal";
 
-/**
- * TradeDetail page
- *
- * - Fetches trade via api.trades.getOne
- * - Fetches screenshots via api.trades.getScreenshots (signed URLs)
- * - Fetches related trades via api.trades.getAll (filtered client-side)
- * - Does NOT read or decrypt encrypted_screenshots
- */
-
 export const TradeDetail = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
@@ -45,7 +28,11 @@ export const TradeDetail = () => {
   const [trade, setTrade] = useState<any | null>(null);
   const [relatedTrades, setRelatedTrades] = useState<any[]>([]);
   const [screenshots, setScreenshots] = useState<{ url: string; uploaded_at?: string }[]>([]);
+  
+  // Loading states
   const [loading, setLoading] = useState<boolean>(true);
+  const [secondaryLoading, setSecondaryLoading] = useState<boolean>(true);
+  
   const [isEditOpen, setIsEditOpen] = useState<boolean>(false);
   const [selectedImage, setSelectedImage] = useState<string | null>(null);
 
@@ -68,40 +55,40 @@ export const TradeDetail = () => {
     return (pnl / risk).toFixed(2);
   };
 
-  /* Data loader (memoized so we can call it on modal close) */
+  /* Data loader */
   const loadData = useCallback(async () => {
     if (!id) return;
     setLoading(true);
+    setSecondaryLoading(true);
+
     try {
-      // 1) Trade
+      // 1) Fetch Critical Data
       const tradeData = await api.trades.getOne(id);
       setTrade(tradeData);
+      
+      // Unblock UI
+      setLoading(false);
 
-      // 2) Screenshots (signed URLs)
-      try {
-        const ss = await api.trades.getScreenshots(id);
-        setScreenshots(Array.isArray(ss?.files) ? ss.files : []);
-      } catch (e) {
-        // If screenshot fetch fails, show a non-blocking toast and continue
-        console.warn("Failed to load screenshots", e);
-        setScreenshots([]);
-      }
+      // 2) Fetch Background Data
+      const fetchScreenshots = api.trades.getScreenshots(id)
+        .then(ss => setScreenshots(Array.isArray(ss?.files) ? ss.files : []))
+        .catch(e => console.warn("Failed to load screenshots", e));
 
-      // 3) Related trades (same symbol, exclude current)
-      try {
-        // Use the optional symbol filter in getAll (page=1, limit=10)
-        const relatedResp = await api.trades.getAll(1, 10, tradeData.symbol);
-        const relatedFiltered = (relatedResp.data || []).filter((t: any) => t.id !== tradeData.id).slice(0, 3);
-        setRelatedTrades(relatedFiltered);
-      } catch (e) {
-        console.warn("Failed to load related trades", e);
-        setRelatedTrades([]);
-      }
+      const fetchRelated = api.trades.getAll(1, 10, tradeData.symbol)
+        .then(resp => {
+          const relatedFiltered = (resp.data || []).filter((t: any) => t.id !== tradeData.id).slice(0, 3);
+          setRelatedTrades(relatedFiltered);
+        })
+        .catch(e => console.warn("Failed to load related trades", e));
+
+      await Promise.allSettled([fetchScreenshots, fetchRelated]);
+      
     } catch (err: any) {
       toast({ title: "Error", description: err?.message || "Could not fetch trade", variant: "destructive" });
       navigate("/trades");
     } finally {
       setLoading(false);
+      setSecondaryLoading(false);
     }
   }, [id, navigate, toast]);
 
@@ -131,40 +118,8 @@ export const TradeDetail = () => {
   const holdingTime = calculateHoldingTime(trade.entry_time, trade.exit_time);
   const isProfitable = (trade.pnl || 0) >= 0;
 
-  // Chart simulation (kept from original)
-  const mockChartData = [
-    { time: "09:25", price: 0 },
-    { time: "09:30", price: 0 },
-    { time: "09:35", price: 0 },
-    { time: "10:00", price: 0 },
-    { time: "10:15", price: 0 },
-  ];
-  const dynamicChartData = mockChartData.map(d => ({
-    ...d,
-    price: trade.entry_price + (Math.random() * (trade.entry_price * 0.02) - (trade.entry_price * 0.01))
-  }));
-
-  /* Prepare edit payload (do not include screenshots) */
-  const tradeForEdit = {
-    id: trade.id,
-    symbol: trade.symbol,
-    side: trade.direction?.toLowerCase(),
-    entryPrice: trade.entry_price,
-    exitPrice: trade.exit_price ?? 0,
-    quantity: trade.quantity,
-    entryDate: trade.entry_time,
-    exitDate: trade.exit_time ?? "",
-    notes: trade.encrypted_notes ?? "",
-    stopLoss: trade.stop_loss,
-    target: trade.target,
-    strategyId: trade.strategy_id,
-    emotion: trade.emotion,
-    tags: trade.tags || [],
-  };
-
   return (
     <div className="min-h-screen p-4 md:p-6 lg:p-8 space-y-4 sm:space-y-6 pb-20">
-      {/* Mobile Back Button */}
       <Button
         variant="ghost"
         size="sm"
@@ -221,18 +176,17 @@ export const TradeDetail = () => {
         </div>
       </div>
 
-      {/* Edit Modal */}
       <EditTradeModal
         open={isEditOpen}
         onOpenChange={(open) => {
           setIsEditOpen(open);
-          // refresh trade and screenshots when modal closes
           if (!open) void loadData();
         }}
-        trade={tradeForEdit}
+        // ✅ FIXED: Pass the raw trade object directly
+        trade={trade}
       />
 
-      {/* Metrics Grid */}
+      {/* Metrics */}
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3 sm:gap-4">
         {[
           { label: "ENTRY", value: `$${trade.entry_price}` },
@@ -269,7 +223,12 @@ export const TradeDetail = () => {
             </Button>
           </div>
 
-          {screenshots && screenshots.length > 0 ? (
+          {secondaryLoading ? (
+             <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+               <Skeleton className="aspect-video w-full rounded-lg" />
+               <Skeleton className="aspect-video w-full rounded-lg" />
+             </div>
+          ) : screenshots && screenshots.length > 0 ? (
             <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
               {screenshots.map((s, index) => (
                 <div
@@ -279,8 +238,15 @@ export const TradeDetail = () => {
                 >
                   <img
                     src={s.url}
-                    alt={`Chart ${index + 1}`}
+                    alt={`Screenshot ${index + 1}`}
                     className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
+                    onError={(e) => {
+                       e.currentTarget.style.display = "none";
+                       e.currentTarget.parentElement?.classList.add("flex", "items-center", "justify-center");
+                       const icon = document.createElement("div");
+                       icon.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-muted-foreground"><path d="m19 5-7 7-7-7"/><path d="m5 19 7-7 7 7"/></svg>';
+                       e.currentTarget.parentElement?.appendChild(icon);
+                    }}
                   />
                   <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
                     <Maximize2 className="text-white h-6 w-6 drop-shadow-md" />
@@ -297,7 +263,7 @@ export const TradeDetail = () => {
         </Card>
       </div>
 
-      {/* Image Preview Modal (Lightbox) */}
+      {/* Lightbox */}
       <Dialog open={!!selectedImage} onOpenChange={(open) => { if (!open) setSelectedImage(null); }}>
         <DialogContent className="max-w-[90vw] max-h-[90vh] p-0 overflow-hidden bg-black/90 border-none">
           {selectedImage && (
@@ -320,7 +286,7 @@ export const TradeDetail = () => {
         </DialogContent>
       </Dialog>
 
-      {/* Strategy & Related Trades */}
+      {/* Strategy & Related */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         <Card className="p-4 sm:p-6">
           <h3 className="text-xs sm:text-sm font-semibold mb-3 sm:mb-4">TAGS & STRATEGY</h3>
@@ -352,7 +318,12 @@ export const TradeDetail = () => {
             </Button>
           </div>
           <div className="space-y-1">
-            {relatedTrades.length > 0 ? relatedTrades.map((relatedTrade) => (
+            {secondaryLoading ? (
+               <>
+                 <Skeleton className="h-10 w-full mb-2" />
+                 <Skeleton className="h-10 w-full mb-2" />
+               </>
+            ) : relatedTrades.length > 0 ? relatedTrades.map((relatedTrade) => (
               <div
                 key={relatedTrade.id}
                 className="flex items-center justify-between py-2 px-3 hover:bg-muted/50 rounded-lg cursor-pointer transition-colors"

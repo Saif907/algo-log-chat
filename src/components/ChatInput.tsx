@@ -54,7 +54,9 @@ export const ChatInput = ({
   const [isFocused, setIsFocused] = useState(false);
   
   const containerRef = useRef<HTMLDivElement>(null);
-  const inputRef = useRef<HTMLInputElement>(null);
+  
+  // ✅ Changed ref type to HTMLTextAreaElement to support new lines
+  const inputRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Controlled vs Uncontrolled logic
@@ -91,7 +93,8 @@ export const ChatInput = ({
     }, 200);
   };
 
-  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  // ✅ Updated event type for textarea
+  const handleChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
     const newValue = e.target.value;
     if (onChange) onChange(newValue);
     if (!isControlled) setLocalValue(newValue);
@@ -110,6 +113,7 @@ export const ChatInput = ({
   };
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
+    // ✅ Logic: Enter sends, Shift+Enter does default (new line)
     if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault();
       handleSend();
@@ -248,11 +252,11 @@ export const ChatInput = ({
                 )}
               </div>
 
-              {/* Text Input */}
+              {/* Text Input (Converted to Textarea) */}
               <div className="flex-1 flex items-center min-w-0">
-                <input
+                <textarea
                   ref={inputRef}
-                  type="text"
+                  rows={1}
                   placeholder={
                     selectedFile 
                       ? "Ask about this file..." 
@@ -267,8 +271,9 @@ export const ChatInput = ({
                   onBlur={handleBlur}
                   disabled={isLoading}
                   className={cn(
-                    "flex-1 bg-transparent border-0 outline-none text-sm placeholder:text-muted-foreground/60 w-full px-2",
-                    variant === "docked" ? "h-12 text-base" : "h-full"
+                    "flex-1 bg-transparent border-0 outline-none text-sm placeholder:text-muted-foreground/60 w-full px-2 resize-none",
+                    // Added py-3 to ensure text centers vertically similar to input
+                    variant === "docked" ? "h-12 text-base py-3" : "h-full py-3"
                   )}
                 />
               </div>

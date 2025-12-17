@@ -221,6 +221,28 @@ export const api = {
       request<void>(`/trades/${id}`, { method: "DELETE" }),
 
     /**
+     * Export all trades as CSV
+     * Uses direct fetch to handle Blob response
+     */
+    export: async () => {
+      const { data: { session } } = await supabase.auth.getSession();
+      const token = session?.access_token;
+      
+      const response = await fetch(`${API_BASE_URL}/trades/export`, {
+        method: 'GET',
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+
+      if (!response.ok) {
+        throw new Error("Failed to export trades");
+      }
+      
+      return response.blob();
+    },
+
+    /**
      * Screenshot upload
      * - tradeId OPTIONAL (supports pre-trade uploads)
      */
@@ -273,16 +295,30 @@ export const api = {
   // --------------------------------------------------------------
   ai: {
     getSessions: () => request<ChatSession[]>("/chat/sessions"),
+    
     deleteSession: (id: string) =>
       request<void>(`/chat/sessions/${id}`, { method: "DELETE" }),
 
-    renameSession: () => Promise.resolve(),
+    // ✅ Re-added the fix for renameSession
+    renameSession: (id: string, topic: string) => 
+      request<ChatSession>(`/chat/sessions/${id}`, {
+        method: "PATCH",
+        body: JSON.stringify({ topic }),
+      }),
 
     getHistory: (sessionId: string) =>
       request<ChatMessage[]>(`/chat/${sessionId}/messages`),
 
+    // ✅ Re-added the fix for sendMessage types
     sendMessage: (sessionId: string, message: string, model = "gpt-4-turbo") =>
-      request<{ response: string; session_id: string }>(
+      request<{ 
+        response: string; 
+        session_id: string;
+        tool_call?: {
+          type: "import-confirmation" | "trade-confirmation" | "trade-receipt";
+          data: any;
+        } 
+      }>(
         "/chat",
         {
           method: "POST",
@@ -342,7 +378,7 @@ export const api = {
 
     connectDhan: (tokenId: string, state: string) =>
       request<{ status: string; broker_id: string }>(
-        "/brokers/dhan/connect",
+        `/brokers/dhan/connect`,
         {
           method: "POST",
           body: JSON.stringify({ tokenId, state }),

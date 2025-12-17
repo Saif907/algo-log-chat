@@ -153,8 +153,9 @@ const ChartTooltipContent = React.forwardRef<
     return (
       <div
         ref={ref}
+        // ✅ FIXED: Using 'bg-popover' and 'text-popover-foreground' guarantees high contrast in dark mode
         className={cn(
-          "grid min-w-[8rem] items-start gap-1.5 rounded-lg border border-border/50 bg-background px-2.5 py-1.5 text-xs shadow-xl",
+          "grid min-w-[8rem] items-start gap-1.5 rounded-lg border border-border/50 bg-popover px-2.5 py-1.5 text-xs text-popover-foreground shadow-xl",
           className,
         )}
       >
@@ -208,7 +209,8 @@ const ChartTooltipContent = React.forwardRef<
                         <span className="text-muted-foreground">{itemConfig?.label || item.name}</span>
                       </div>
                       {item.value && (
-                        <span className="font-mono font-medium tabular-nums text-foreground">
+                        // ✅ FIXED: Explicitly use text-popover-foreground for the value
+                        <span className="font-mono font-medium tabular-nums text-popover-foreground">
                           {item.value.toLocaleString()}
                         </span>
                       )}

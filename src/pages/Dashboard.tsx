@@ -27,14 +27,12 @@ export const Dashboard = () => {
     );
   }
 
-  // Helper for currency formatting (Safe for floats)
   const fmtCurrency = (val: number) => `$${Number(val || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
-  // Mini Calendar Generation
   const today = new Date();
   const monthStart = startOfMonth(today);
   const monthEnd = endOfMonth(today);
-  const startDay = getDay(monthStart); // 0 = Sunday
+  const startDay = getDay(monthStart);
   const daysInMonth = getDate(monthEnd);
   
   const calendarDays = Array(startDay).fill(null);
@@ -55,7 +53,6 @@ export const Dashboard = () => {
 
   return (
     <div className="min-h-screen p-4 sm:p-6 space-y-4 sm:space-y-6 pb-28 sm:pb-32">
-      {/* Stats Cards */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
         <Card className="p-4 sm:p-6">
           <p className="text-[10px] sm:text-sm text-muted-foreground mb-0.5 sm:mb-1">NET P/L</p>
@@ -93,7 +90,6 @@ export const Dashboard = () => {
           <p className="text-xl sm:text-3xl font-bold">{stats.profitFactor}</p>
           <div className="mt-2 sm:mt-3 space-y-1">
             <div className="h-1 sm:h-1.5 bg-success rounded-full" style={{ width: "100%" }} />
-            {/* Safe Profit Factor Bar */}
             <div className="h-1 sm:h-1.5 bg-destructive rounded-full" 
                  style={{ width: `${Math.min((1/Number(stats.profitFactor || 1))*100, 100)}%` }} />
           </div>
@@ -116,7 +112,6 @@ export const Dashboard = () => {
         </Card>
       </div>
 
-      {/* Charts Row 1 */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 sm:gap-4">
         <Card className="p-4 sm:p-6">
           <div className="flex items-center justify-between mb-3 sm:mb-4">
@@ -136,11 +131,18 @@ export const Dashboard = () => {
               <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
               <XAxis dataKey="date" stroke="hsl(var(--muted-foreground))" tick={{ fontSize: 10 }} />
               <YAxis stroke="hsl(var(--muted-foreground))" tick={{ fontSize: 10 }} />
+              
+              {/* ✅ FIXED: Tooltip Colors */}
               <Tooltip 
-                contentStyle={{ backgroundColor: 'hsl(var(--card))', borderColor: 'hsl(var(--border))' }}
-                itemStyle={{ color: 'hsl(var(--foreground))' }}
+                contentStyle={{ 
+                  backgroundColor: 'hsl(var(--popover))', 
+                  borderColor: 'hsl(var(--border))',
+                  color: 'hsl(var(--popover-foreground))'
+                }}
+                itemStyle={{ color: 'hsl(var(--popover-foreground))' }}
                 formatter={(value: number) => fmtCurrency(value)}
               />
+              
               <Area type="monotone" dataKey="value" stroke="hsl(var(--primary))" fill="url(#colorValue)" strokeWidth={2} />
             </AreaChart>
           </ResponsiveContainer>
@@ -155,11 +157,19 @@ export const Dashboard = () => {
               <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
               <XAxis dataKey="date" stroke="hsl(var(--muted-foreground))" tick={{ fontSize: 10 }} />
               <YAxis stroke="hsl(var(--muted-foreground))" tick={{ fontSize: 10 }} />
+              
+              {/* ✅ FIXED: Tooltip Colors */}
               <Tooltip 
                  cursor={{fill: 'hsl(var(--muted)/0.2)'}}
-                 contentStyle={{ backgroundColor: 'hsl(var(--card))', borderColor: 'hsl(var(--border))' }}
+                 contentStyle={{ 
+                   backgroundColor: 'hsl(var(--popover))', 
+                   borderColor: 'hsl(var(--border))',
+                   color: 'hsl(var(--popover-foreground))'
+                 }}
+                 itemStyle={{ color: 'hsl(var(--popover-foreground))' }}
                  formatter={(value: number) => fmtCurrency(value)}
               />
+              
               <Bar dataKey="value" radius={[4, 4, 0, 0]}>
                 {stats.dailyData.map((entry, index) => (
                   <Cell key={`cell-${index}`} fill={entry.value >= 0 ? "hsl(var(--success))" : "hsl(var(--destructive))"} />
@@ -170,7 +180,6 @@ export const Dashboard = () => {
         </Card>
       </div>
 
-      {/* Charts Row 2 */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 sm:gap-4">
         <Card className="p-4 sm:p-6">
           <div className="flex items-center justify-between mb-3 sm:mb-4">
@@ -203,7 +212,6 @@ export const Dashboard = () => {
               <div key={instrument.symbol} className="flex items-center justify-between py-1.5 sm:py-2 border-b border-border last:border-0">
                 <div className="flex items-center gap-2 sm:gap-3">
                   <span className="text-xs sm:text-sm font-bold">{instrument.symbol}</span>
-                  {/* ✅ NEW: Instrument Type Badge */}
                   <Badge variant="secondary" className="text-[10px] px-1 h-5">{instrument.type}</Badge>
                 </div>
                 <div className="flex items-center gap-2">
@@ -226,7 +234,6 @@ export const Dashboard = () => {
         </Card>
       </div>
 
-      {/* Recent Trades */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 sm:gap-4">
         <Card className="p-4 sm:p-6">
           <div className="flex items-center justify-between mb-3 sm:mb-4">
@@ -267,7 +274,6 @@ export const Dashboard = () => {
           </div>
         </Card>
 
-        {/* Mini Calendar */}
         <Card className="p-4 sm:p-6">
           <div className="flex items-center justify-between mb-3 sm:mb-4">
             <h3 className="text-xs sm:text-sm font-semibold">MINI CALENDAR</h3>
@@ -302,7 +308,7 @@ export const Dashboard = () => {
         </Card>
       </div>
 
-      <ChatInput placeholder="Ask anything about your trading performance..." />
+      
     </div>
   );
 };
