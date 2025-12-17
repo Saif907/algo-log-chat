@@ -54,7 +54,7 @@ export default function APIKeys() {
           <CardContent className="p-6">
             <h2 className="text-lg font-semibold mb-2">API Documentation</h2>
             <p className="text-sm text-muted-foreground mb-4">
-              Learn how to integrate TradeLM with your applications
+              Learn how to integrate TradeOmen with your applications
             </p>
             <Button variant="outline">View Documentation</Button>
           </CardContent>

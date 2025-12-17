@@ -100,7 +100,7 @@ export const Auth = () => {
           </CardTitle>
           <CardDescription className="text-center">
             {isLogin
-              ? 'Sign in to your TradeLM account'
+              ? 'Sign in to your TradeOmen account'
               : 'Sign up to start tracking your trades'}
           </CardDescription>
         </CardHeader>

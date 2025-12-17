@@ -28,7 +28,7 @@ export default function AISettings() {
           <CardContent className="p-6">
             <h2 className="text-lg font-semibold mb-2">AI Assistant Configuration</h2>
             <p className="text-sm text-muted-foreground mb-6">
-              Customize how TradeLM interacts with your data.
+              Customize how TradeOmen interacts with your data.
             </p>
 
             <div className="space-y-6">

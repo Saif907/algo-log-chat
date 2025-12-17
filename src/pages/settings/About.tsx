@@ -18,12 +18,12 @@ export default function About() {
                 <span className="text-white font-bold text-2xl">T</span>
               </div>
               <div>
-                <h2 className="text-2xl font-bold">TradeLM</h2>
+                <h2 className="text-2xl font-bold">TradeOmen</h2>
                 <p className="text-muted-foreground">Version 1.0.0</p>
               </div>
             </div>
             <p className="text-sm text-muted-foreground">
-              TradeLM is a comprehensive trading journal and analytics platform designed to help traders improve their performance through data-driven insights and AI-powered analysis.
+              TradeOmen is a comprehensive trading journal and analytics platform designed to help traders improve their performance through data-driven insights and AI-powered analysis.
             </p>
           </CardContent>
         </Card>

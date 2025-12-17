@@ -38,7 +38,7 @@ const LayoutContent = ({ children }: LayoutProps) => {
             <div className="w-7 h-7 bg-gradient-to-br from-primary to-purple-600 rounded-lg flex items-center justify-center">
               <span className="text-white font-bold text-xs">T</span>
             </div>
-            <span className="font-semibold">TradeLM</span>
+            <span className="font-semibold">TradeOmen</span>
           </div>
         </header>
       )}
