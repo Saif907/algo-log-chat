@@ -1,5 +1,5 @@
 import { ReactNode } from "react";
-import { Sidebar } from "./Sidebar";
+import { Sidebar } from "@/components/Sidebar";;
 import { cn } from "@/lib/utils";
 import { SidebarProvider, useSidebar } from "@/contexts/SidebarContext";
 import { Menu } from "lucide-react";

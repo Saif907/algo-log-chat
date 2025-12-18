@@ -8,6 +8,18 @@ const API_BASE_URL =
   import.meta.env.VITE_API_URL || "http://localhost:8000/api/v1";
 
 // ------------------------------------------------------------------
+// 1. Custom Error Class (CRITICAL FOR MODALS)
+// ------------------------------------------------------------------
+export class ApiError extends Error {
+  status: number;
+  constructor(message: string, status: number) {
+    super(message);
+    this.name = "ApiError";
+    this.status = status;
+  }
+}
+
+// ------------------------------------------------------------------
 // Type Definitions
 // ------------------------------------------------------------------
 
@@ -19,43 +31,28 @@ export type InstrumentType = "STOCK" | "CRYPTO" | "FOREX" | "FUTURES";
 export interface Trade {
   id: string;
   user_id: string;
-
   symbol: string;
   instrument_type: InstrumentType;
   direction: TradeDirection;
   status: TradeStatus;
-
   entry_price: number;
   exit_price?: number;
   quantity: number;
-
   entry_time: string;
   exit_time?: string;
-
   fees?: number;
   stop_loss?: number;
   target?: number;
   pnl?: number;
-
-  // Content
   notes?: string;
   raw_notes?: string;
   tags?: string[];
-
-  /**
-   * IMPORTANT:
-   * This is NOT an array.
-   * Backend stores screenshots separately in storage.
-   * This field is intentionally nullable and opaque.
-   */
   encrypted_screenshots?: string | null;
-
   metadata?: Record<string, any>;
   strategy_id?: string;
   created_at: string;
 }
 
-// Pagination
 export interface PaginatedResponse<T> {
   data: T[];
   total: number;
@@ -63,7 +60,6 @@ export interface PaginatedResponse<T> {
   size: number;
 }
 
-// Strategies
 export interface Strategy {
   id: string;
   name: string;
@@ -77,7 +73,6 @@ export interface Strategy {
   updated_at?: string;
 }
 
-// Chat / AI
 export interface ChatMessage {
   id?: string;
   role: "user" | "assistant" | "system";
@@ -101,7 +96,6 @@ export interface ChatSession {
   created_at: string;
 }
 
-// Brokers
 export interface BrokerAccount {
   id: string;
   broker_name: string;
@@ -111,7 +105,6 @@ export interface BrokerAccount {
   created_at: string;
 }
 
-// News
 export interface NewsSource {
   title: string;
   url: string;
@@ -124,7 +117,6 @@ export interface NewsResult {
   related_questions: string[];
 }
 
-// Screenshot types
 export interface ScreenshotUploadResponse {
   success: boolean;
 }
@@ -136,7 +128,7 @@ export interface TradeScreenshot {
 }
 
 // ------------------------------------------------------------------
-// Core Request Wrapper
+// Core Request Wrapper (UPDATED)
 // ------------------------------------------------------------------
 async function request<T>(
   endpoint: string,
@@ -165,6 +157,7 @@ async function request<T>(
     headers,
   });
 
+  // ✅ Handle Errors Properly
   if (!response.ok) {
     let message = "API Request Failed";
     try {
@@ -173,7 +166,8 @@ async function request<T>(
     } catch {
       message = `HTTP ${response.status}`;
     }
-    throw new Error(message);
+    // Throw ApiError so UI can check for 402/403
+    throw new ApiError(message, response.status);
   }
 
   if (response.status === 204) {
@@ -220,10 +214,7 @@ export const api = {
     delete: (id: string) =>
       request<void>(`/trades/${id}`, { method: "DELETE" }),
 
-    /**
-     * Export all trades as CSV
-     * Uses direct fetch to handle Blob response
-     */
+    // ✅ FIXED: Handle 403 before blob
     export: async () => {
       const { data: { session } } = await supabase.auth.getSession();
       const token = session?.access_token;
@@ -236,20 +227,18 @@ export const api = {
       });
 
       if (!response.ok) {
+        if (response.status === 403) {
+            throw new ApiError("Export is a PRO feature. Please upgrade.", 403);
+        }
         throw new Error("Failed to export trades");
       }
       
       return response.blob();
     },
 
-    /**
-     * Screenshot upload
-     * - tradeId OPTIONAL (supports pre-trade uploads)
-     */
     uploadScreenshot: (file: File, tradeId?: string) => {
       const form = new FormData();
       form.append("file", file);
-
       const q = tradeId ? `?trade_id=${tradeId}` : "";
 
       return request<ScreenshotUploadResponse>(
@@ -261,9 +250,6 @@ export const api = {
       );
     },
 
-    /**
-     * Fetch screenshots for a trade
-     */
     getScreenshots: (tradeId: string) =>
       request<{ files: TradeScreenshot[] }>(
         `/trades/${tradeId}/screenshots`
@@ -299,7 +285,6 @@ export const api = {
     deleteSession: (id: string) =>
       request<void>(`/chat/sessions/${id}`, { method: "DELETE" }),
 
-    // ✅ Re-added the fix for renameSession
     renameSession: (id: string, topic: string) => 
       request<ChatSession>(`/chat/sessions/${id}`, {
         method: "PATCH",
@@ -309,11 +294,12 @@ export const api = {
     getHistory: (sessionId: string) =>
       request<ChatMessage[]>(`/chat/${sessionId}/messages`),
 
-    // ✅ Re-added the fix for sendMessage types
-    sendMessage: (sessionId: string, message: string, model = "gpt-4-turbo") =>
+    // ✅ FIXED: Add webSearch param and usage type
+    sendMessage: (sessionId: string, message: string, webSearch: boolean = false, model = "gpt-4-turbo") =>
       request<{ 
         response: string; 
         session_id: string;
+        usage?: { total_tokens: number };
         tool_call?: {
           type: "import-confirmation" | "trade-confirmation" | "trade-receipt";
           data: any;
@@ -322,7 +308,12 @@ export const api = {
         "/chat",
         {
           method: "POST",
-          body: JSON.stringify({ session_id: sessionId, message, model }),
+          body: JSON.stringify({ 
+            session_id: sessionId, 
+            message, 
+            model,
+            web_search: webSearch 
+          }),
         }
       ),
 
