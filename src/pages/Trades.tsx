@@ -1,3 +1,4 @@
+// frontend/src/pages/trades.tsx
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
@@ -19,15 +20,14 @@ import { useToast } from "@/hooks/use-toast";
 // ✅ Import Contexts
 import { useModal } from "@/contexts/ModalContext";
 import { useAuth } from "@/contexts/AuthContext";
-// Note: Removed supabase import, it's no longer needed here!
 
 export const Trades = () => {
   const navigate = useNavigate();
   const { toast } = useToast();
   const { openUpgradeModal } = useModal();
   
-  // ✅ USE GLOBAL PLAN (No more local fetching!)
-  const { user, plan } = useAuth();
+  // ✅ USE GLOBAL PLAN
+  const { plan } = useAuth();
   
   // --- Pagination & Filter State ---
   const [page, setPage] = useState(1);
@@ -46,7 +46,7 @@ export const Trades = () => {
   const { trades, total, totalPages, isLoading, isFetching } = useTrades(page, pageSize, search);
 
   // --- 🛡️ SIMPLIFIED PLAN CHECK ---
-  const userPlan = plan.toUpperCase();
+  const userPlan = (plan || "FREE").toUpperCase();
   const isPro = userPlan === "PRO" || userPlan === "FOUNDER";
   
   // Define Limits
@@ -211,7 +211,13 @@ export const Trades = () => {
             </div>
           </div>
 
-          <Tabs value={activeTab} onValueChange={setActiveTab}>
+          <Tabs 
+            value={activeTab} 
+            onValueChange={(v) => { 
+                setActiveTab(v); 
+                setPage(1); // ✅ Reset page on tab switch
+            }}
+          >
             <TabsList className="w-full sm:w-auto">
               <TabsTrigger value="all" className="flex-1 sm:flex-none">All Trades</TabsTrigger>
               <TabsTrigger value="winning" className="flex-1 sm:flex-none">Winning</TabsTrigger>
@@ -245,7 +251,13 @@ export const Trades = () => {
                     />
                   </div>
                   
-                  <Select value={filterInstrument} onValueChange={setFilterInstrument}>
+                  <Select 
+                    value={filterInstrument} 
+                    onValueChange={(v) => {
+                        setFilterInstrument(v);
+                        setPage(1); // ✅ Reset page on filter switch
+                    }}
+                  >
                     <SelectTrigger><SelectValue placeholder="Instrument" /></SelectTrigger>
                     <SelectContent>
                       <SelectItem value="all-instruments">All Instruments</SelectItem>
@@ -257,7 +269,13 @@ export const Trades = () => {
                     </SelectContent>
                   </Select>
 
-                  <Select value={filterDirection} onValueChange={setFilterDirection}>
+                  <Select 
+                    value={filterDirection} 
+                    onValueChange={(v) => {
+                        setFilterDirection(v);
+                        setPage(1); // ✅ Reset page on filter switch
+                    }}
+                  >
                     <SelectTrigger><SelectValue placeholder="Direction" /></SelectTrigger>
                     <SelectContent>
                       <SelectItem value="all-directions">All Directions</SelectItem>

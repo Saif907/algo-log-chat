@@ -1,6 +1,6 @@
-// frontend/src/pages/TradeDetail.tsx
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
+import { useQuery, useQueryClient } from "@tanstack/react-query"; // ✅ Import React Query hooks
 import {
   Edit,
   Trash2,
@@ -8,7 +8,7 @@ import {
   ArrowLeft,
   Maximize2,
   ExternalLink,
-  ImageOff,
+  Lock,
 } from "lucide-react";
 
 import { Card } from "@/components/ui/card";
@@ -17,24 +17,61 @@ import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useToast } from "@/hooks/use-toast";
-import api from "@/services/api";
+import { api, Trade } from "@/services/api"; // Ensure Trade type is imported
 import { EditTradeModal } from "@/components/trades/EditTradeModal";
+
+import { useAuth } from "@/contexts/AuthContext";
+import { useModal } from "@/contexts/ModalContext";
 
 export const TradeDetail = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const { toast } = useToast();
+  const queryClient = useQueryClient();
 
-  const [trade, setTrade] = useState<any | null>(null);
-  const [relatedTrades, setRelatedTrades] = useState<any[]>([]);
-  const [screenshots, setScreenshots] = useState<{ url: string; uploaded_at?: string }[]>([]);
-  
-  // Loading states
-  const [loading, setLoading] = useState<boolean>(true);
-  const [secondaryLoading, setSecondaryLoading] = useState<boolean>(true);
-  
+  const { plan } = useAuth();
+  const { openUpgradeModal } = useModal();
+  const isPro = plan === "PRO" || plan === "FOUNDER";
+
   const [isEditOpen, setIsEditOpen] = useState<boolean>(false);
   const [selectedImage, setSelectedImage] = useState<string | null>(null);
+
+  // --- 1. INSTANT LOAD: Fetch Trade with Cache Fallback ---
+  const { data: trade, isLoading: isTradeLoading, isError } = useQuery({
+    queryKey: ["trade", id],
+    queryFn: () => api.trades.getOne(id!),
+    enabled: !!id,
+    initialData: () => {
+      // ⚡ MAGIC: Try to find this trade in the 'trades' list cache first
+      // Note: This matches the default page 1 key. If user came from page 2, 
+      // we might miss it, but that's fine—it just falls back to fetching.
+      const allTrades = queryClient.getQueryData<any>(["trades", 1, 20, ""])?.data; 
+      return allTrades?.find((t: Trade) => t.id === id);
+    },
+    initialDataUpdatedAt: () => {
+        // Mark initial data as potentially stale so we fetch fresh data (notes/screenshots) in background
+        // but SHOW the cached data instantly.
+        return queryClient.getQueryState(["trades", 1, 20, ""])?.dataUpdatedAt;
+    }
+  });
+
+  // --- 2. BACKGROUND FETCH: Screenshots & Related ---
+  // These run in parallel but don't block the main UI
+  const { data: screenshots, isLoading: isScreenshotsLoading } = useQuery({
+    queryKey: ["trade-screenshots", id],
+    queryFn: () => api.trades.getScreenshots(id!).then(res => res.files),
+    enabled: !!id,
+  });
+
+  const { data: relatedTrades, isLoading: isRelatedLoading } = useQuery({
+    queryKey: ["related-trades", trade?.symbol],
+    queryFn: async () => {
+        if (!trade?.symbol) return [];
+        const res = await api.trades.getAll(1, 10, trade.symbol);
+        return (res.data || []).filter((t: any) => t.id !== id).slice(0, 3);
+    },
+    enabled: !!trade?.symbol, // Only fetch once we know the symbol
+  });
 
   /* Helpers */
   const calculateHoldingTime = (start: string, end?: string | null) => {
@@ -55,48 +92,6 @@ export const TradeDetail = () => {
     return (pnl / risk).toFixed(2);
   };
 
-  /* Data loader */
-  const loadData = useCallback(async () => {
-    if (!id) return;
-    setLoading(true);
-    setSecondaryLoading(true);
-
-    try {
-      // 1) Fetch Critical Data
-      const tradeData = await api.trades.getOne(id);
-      setTrade(tradeData);
-      
-      // Unblock UI
-      setLoading(false);
-
-      // 2) Fetch Background Data
-      const fetchScreenshots = api.trades.getScreenshots(id)
-        .then(ss => setScreenshots(Array.isArray(ss?.files) ? ss.files : []))
-        .catch(e => console.warn("Failed to load screenshots", e));
-
-      const fetchRelated = api.trades.getAll(1, 10, tradeData.symbol)
-        .then(resp => {
-          const relatedFiltered = (resp.data || []).filter((t: any) => t.id !== tradeData.id).slice(0, 3);
-          setRelatedTrades(relatedFiltered);
-        })
-        .catch(e => console.warn("Failed to load related trades", e));
-
-      await Promise.allSettled([fetchScreenshots, fetchRelated]);
-      
-    } catch (err: any) {
-      toast({ title: "Error", description: err?.message || "Could not fetch trade", variant: "destructive" });
-      navigate("/trades");
-    } finally {
-      setLoading(false);
-      setSecondaryLoading(false);
-    }
-  }, [id, navigate, toast]);
-
-  useEffect(() => {
-    void loadData();
-  }, [loadData]);
-
-  /* Handlers */
   const handleDelete = async () => {
     if (!id) return;
     if (!confirm("Are you sure you want to delete this trade?")) return;
@@ -109,7 +104,16 @@ export const TradeDetail = () => {
     }
   };
 
-  if (loading) return <div className="p-8"><Skeleton className="h-[600px] w-full" /></div>;
+  // Handle Errors/Redirect
+  if (isError) {
+      navigate("/trades");
+      return null;
+  }
+
+  // Show Skeleton ONLY if we have absolutely no data (fresh load from direct URL)
+  if (isTradeLoading && !trade) return <div className="p-8"><Skeleton className="h-[600px] w-full" /></div>;
+  
+  // If we have initialData, 'trade' is populated instantly!
   if (!trade) return null;
 
   /* Derived values */
@@ -119,7 +123,7 @@ export const TradeDetail = () => {
   const isProfitable = (trade.pnl || 0) >= 0;
 
   return (
-    <div className="min-h-screen p-4 md:p-6 lg:p-8 space-y-4 sm:space-y-6 pb-20">
+    <div className="min-h-screen p-4 md:p-6 lg:p-8 space-y-4 sm:space-y-6 pb-20 animate-in fade-in duration-300">
       <Button
         variant="ghost"
         size="sm"
@@ -180,9 +184,9 @@ export const TradeDetail = () => {
         open={isEditOpen}
         onOpenChange={(open) => {
           setIsEditOpen(open);
-          if (!open) void loadData();
+          // React Query handles auto-refetching on mutation success, 
+          // so we don't need manual reload logic here!
         }}
-        // ✅ FIXED: Pass the raw trade object directly
         trade={trade}
       />
 
@@ -210,6 +214,7 @@ export const TradeDetail = () => {
         <Card className="p-4 sm:p-6 flex flex-col">
           <h3 className="text-xs sm:text-sm font-semibold mb-3 sm:mb-4">TRADE NOTES</h3>
           <div className="bg-muted/30 p-4 rounded-lg flex-1 text-sm whitespace-pre-wrap leading-relaxed min-h-[200px]">
+            {/* Note: 'encrypted_notes' is actually decrypted by backend now, field name just legacy */}
             {trade.encrypted_notes || <span className="text-muted-foreground italic">No notes added.</span>}
           </div>
         </Card>
@@ -217,20 +222,31 @@ export const TradeDetail = () => {
         <Card className="p-4 sm:p-6">
           <div className="flex items-center justify-between mb-3 sm:mb-4">
             <h3 className="text-xs sm:text-sm font-semibold">SCREENSHOTS</h3>
-            <Button variant="outline" size="sm" className="h-8 text-xs gap-2" onClick={() => setIsEditOpen(true)}>
-              <Upload className="h-3.5 w-3.5" />
-              Manage
-            </Button>
+            
+            {isPro ? (
+              <Button variant="outline" size="sm" className="h-8 text-xs gap-2" onClick={() => setIsEditOpen(true)}>
+                <Upload className="h-3.5 w-3.5" />
+                Manage
+              </Button>
+            ) : (
+              <Badge 
+                variant="default" 
+                className="bg-amber-500 hover:bg-amber-600 cursor-pointer h-6 px-2 text-[10px] gap-1"
+                onClick={() => openUpgradeModal("Manage screenshots and visual journals with the PRO plan.")}
+              >
+                <Lock className="w-3 h-3" /> PRO
+              </Badge>
+            )}
           </div>
 
-          {secondaryLoading ? (
+          {isScreenshotsLoading ? (
              <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
                <Skeleton className="aspect-video w-full rounded-lg" />
                <Skeleton className="aspect-video w-full rounded-lg" />
              </div>
           ) : screenshots && screenshots.length > 0 ? (
             <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-              {screenshots.map((s, index) => (
+              {screenshots.map((s: any, index: number) => (
                 <div
                   key={index}
                   className="group relative aspect-video bg-muted rounded-lg overflow-hidden border cursor-pointer hover:ring-2 ring-primary/50 transition-all"
@@ -240,13 +256,6 @@ export const TradeDetail = () => {
                     src={s.url}
                     alt={`Screenshot ${index + 1}`}
                     className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
-                    onError={(e) => {
-                       e.currentTarget.style.display = "none";
-                       e.currentTarget.parentElement?.classList.add("flex", "items-center", "justify-center");
-                       const icon = document.createElement("div");
-                       icon.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-muted-foreground"><path d="m19 5-7 7-7-7"/><path d="m5 19 7-7 7 7"/></svg>';
-                       e.currentTarget.parentElement?.appendChild(icon);
-                    }}
                   />
                   <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
                     <Maximize2 className="text-white h-6 w-6 drop-shadow-md" />
@@ -318,12 +327,12 @@ export const TradeDetail = () => {
             </Button>
           </div>
           <div className="space-y-1">
-            {secondaryLoading ? (
+            {isRelatedLoading ? (
                <>
                  <Skeleton className="h-10 w-full mb-2" />
                  <Skeleton className="h-10 w-full mb-2" />
                </>
-            ) : relatedTrades.length > 0 ? relatedTrades.map((relatedTrade) => (
+            ) : relatedTrades && relatedTrades.length > 0 ? relatedTrades.map((relatedTrade: any) => (
               <div
                 key={relatedTrade.id}
                 className="flex items-center justify-between py-2 px-3 hover:bg-muted/50 rounded-lg cursor-pointer transition-colors"

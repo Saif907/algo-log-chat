@@ -116,10 +116,11 @@ export interface NewsResult {
   related_questions: string[];
 }
 
-// ✅ FIXED: Matches Backend Response
+// ✅ FIXED: Matches Backend Response for Multiple Files
 export interface ScreenshotUploadResponse {
-  url: string;
+  files: { filename: string; url: string }[];
   uploaded_to_trade: boolean;
+  count: number;
 }
 
 export interface TradeScreenshot {
@@ -237,13 +238,17 @@ export const api = {
       return response.blob();
     },
 
-    uploadScreenshot: (file: File, tradeId?: string) => {
+    // ✅ UPDATED: Supports Multiple Files & New Endpoint
+    uploadScreenshots: (files: File[], tradeId?: string) => {
       const form = new FormData();
-      form.append("file", file);
+      files.forEach((file) => {
+        form.append("files", file); // Key must match FastAPI's 'files: List[UploadFile]'
+      });
+      
       const q = tradeId ? `?trade_id=${tradeId}` : "";
 
       return request<ScreenshotUploadResponse>(
-        `/trades/uploads/trade-screenshot${q}`,
+        `/trades/uploads/trade-screenshots${q}`,
         {
           method: "POST",
           body: form,
