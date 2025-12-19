@@ -6,17 +6,22 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { Badge } from "@/components/ui/badge";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Plus, MoreVertical, Trash2, Edit, TrendingUp, Loader2, X } from "lucide-react";
-import { ChatInput } from "@/components/ChatInput";
 import { useStrategies } from "@/hooks/use-strategies";
 import { Skeleton } from "@/components/ui/skeleton";
+
+// ✅ 1. Import Context and Error Type
+import { useModal } from "@/contexts/ModalContext";
+import { ApiError } from "@/services/api";
 
 export const Strategies = () => {
   const navigate = useNavigate();
   const { strategies, isLoading, createStrategy, deleteStrategy } = useStrategies();
   
+  // ✅ 2. Hook into the Modal Context
+  const { openUpgradeModal } = useModal();
+
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   
@@ -76,25 +81,36 @@ export const Strategies = () => {
       });
 
       await createStrategy({
-        name: formData.get("name"),
-        emoji: formData.get("emoji") || "📈",
-        description: formData.get("description"),
-        color_hex: formData.get("color") || "#8b5cf6",
-        style: formData.get("style"),
+        name: formData.get("name") as string,
+        emoji: (formData.get("emoji") as string) || "📈",
+        description: formData.get("description") as string,
+        color_hex: (formData.get("color") as string) || "#8b5cf6",
+        style: formData.get("style") as string,
         instrument_types: formData.get("instruments")?.toString().split(",").map(s => s.trim()) || [],
         track_missed_trades: true,
         rules: rulesJson
       });
       
       setIsCreateOpen(false);
+      // Reset form state
       setRuleGroups([
         { id: "market", name: "Market State / Conditions", rules: [] },
         { id: "entry", name: "Entry Rules", rules: [] },
         { id: "exit", name: "Exit / Target Rules", rules: [] },
         { id: "risk", name: "Risk / Management Rules", rules: [] },
       ]);
-    } catch (error) {
-      console.error(error);
+    } catch (error: any) {
+      // ✅ 3. INTERCEPT QUOTA ERROR
+      console.error("Strategy creation failed:", error);
+      
+      // Check if it's the specific "Payment Required" error from QuotaManager
+      if (error?.status === 402 || (error instanceof ApiError && error.status === 402)) {
+        setIsCreateOpen(false); // Close the form dialog
+        openUpgradeModal("You've reached the strategy limit for the Free plan. Upgrade to create unlimited strategies.");
+      } else {
+        // You can add a toast notification here for generic errors if you like
+        // toast.error("Failed to create strategy. Please try again.");
+      }
     } finally {
       setIsSubmitting(false);
     }
@@ -250,16 +266,16 @@ export const Strategies = () => {
                           <div className="flex items-center gap-2 mt-2">
                              <Plus className="h-3 w-3 text-muted-foreground ml-1" />
                              <Input 
-                                placeholder={`Add new rule to ${group.name}...`}
-                                className="h-8 text-sm bg-muted/30 border-transparent focus:bg-background"
-                                onKeyDown={(e) => {
-                                  if (e.key === 'Enter') {
-                                    e.preventDefault();
-                                    addRule(group.id, e.currentTarget.value);
-                                    e.currentTarget.value = '';
-                                  }
-                                }}
-                              />
+                               placeholder={`Add new rule to ${group.name}...`}
+                               className="h-8 text-sm bg-muted/30 border-transparent focus:bg-background"
+                               onKeyDown={(e) => {
+                                 if (e.key === 'Enter') {
+                                   e.preventDefault();
+                                   addRule(group.id, e.currentTarget.value);
+                                   e.currentTarget.value = '';
+                                 }
+                               }}
+                             />
                           </div>
                         </div>
                       </div>
@@ -347,7 +363,7 @@ export const Strategies = () => {
                     </div>
                   </div>
 
-                  {/* Restored Metrics Grid */}
+                  {/* Metrics Grid */}
                   <div className="grid grid-cols-2 gap-3 text-sm border-t border-border/50 pt-4 mt-2">
                     <div>
                       <p className="text-muted-foreground text-xs">Profit Factor</p>
@@ -374,8 +390,6 @@ export const Strategies = () => {
         </div>
         </div>
       </div>
-      
-      
     </div>
   );
 };

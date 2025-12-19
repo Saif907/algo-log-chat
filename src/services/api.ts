@@ -1,4 +1,3 @@
-// frontend/src/services/api.ts
 import { supabase } from "@/integrations/supabase/client";
 
 // ------------------------------------------------------------------
@@ -117,8 +116,10 @@ export interface NewsResult {
   related_questions: string[];
 }
 
+// ✅ FIXED: Matches Backend Response
 export interface ScreenshotUploadResponse {
-  success: boolean;
+  url: string;
+  uploaded_to_trade: boolean;
 }
 
 export interface TradeScreenshot {
@@ -294,7 +295,6 @@ export const api = {
     getHistory: (sessionId: string) =>
       request<ChatMessage[]>(`/chat/${sessionId}/messages`),
 
-    // ✅ FIXED: Add webSearch param and usage type
     sendMessage: (sessionId: string, message: string, webSearch: boolean = false, model = "gpt-4-turbo") =>
       request<{ 
         response: string; 

@@ -1,26 +1,33 @@
-// frontend/src/pages/Trades.tsx
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
-import { Download, Plus, Filter, Search, ChevronLeft, ChevronRight, Loader2 } from "lucide-react";
+import { Download, Plus, Filter, Search, ChevronLeft, ChevronRight, Loader2, Lock } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
-import { ChatInput } from "@/components/ChatInput";
 import { AddTradeModal } from "@/components/trades/AddTradeModal";
 import { TradeCard } from "@/components/trades/TradeCard";
 import { useTrades } from "@/hooks/use-trades";
 import { Skeleton } from "@/components/ui/skeleton";
-import { api } from "@/services/api"; // Added Import
-import { useToast } from "@/hooks/use-toast"; // Added Import
+import { api, ApiError } from "@/services/api";
+import { useToast } from "@/hooks/use-toast";
+
+// ✅ Import Contexts
+import { useModal } from "@/contexts/ModalContext";
+import { useAuth } from "@/contexts/AuthContext";
+// Note: Removed supabase import, it's no longer needed here!
 
 export const Trades = () => {
   const navigate = useNavigate();
-  const { toast } = useToast(); // Added Hook
+  const { toast } = useToast();
+  const { openUpgradeModal } = useModal();
+  
+  // ✅ USE GLOBAL PLAN (No more local fetching!)
+  const { user, plan } = useAuth();
   
   // --- Pagination & Filter State ---
   const [page, setPage] = useState(1);
@@ -29,7 +36,7 @@ export const Trades = () => {
   const [activeTab, setActiveTab] = useState("all");
   const [isAddTradeOpen, setIsAddTradeOpen] = useState(false);
   const [filtersOpen, setFiltersOpen] = useState(false);
-  const [isExporting, setIsExporting] = useState(false); // Added State
+  const [isExporting, setIsExporting] = useState(false);
 
   // Filter State
   const [filterInstrument, setFilterInstrument] = useState("all-instruments");
@@ -38,13 +45,35 @@ export const Trades = () => {
   // ✅ Fetch Paginated Data
   const { trades, total, totalPages, isLoading, isFetching } = useTrades(page, pageSize, search);
 
-  // ✅ Handle CSV Export (New Logic)
+  // --- 🛡️ SIMPLIFIED PLAN CHECK ---
+  const userPlan = plan.toUpperCase();
+  const isPro = userPlan === "PRO" || userPlan === "FOUNDER";
+  
+  // Define Limits
+  const TRADE_LIMIT_FREE = 100;
+
+  // ✅ Handle "Add Trade" Click
+  const handleAddTradeClick = () => {
+    // Check if free user exceeded limit
+    if (!isPro && total >= TRADE_LIMIT_FREE) {
+        openUpgradeModal(`You have reached the ${TRADE_LIMIT_FREE} trade limit for the Free plan. Upgrade to log unlimited trades.`);
+        return;
+    }
+    setIsAddTradeOpen(true);
+  };
+
+  // ✅ Handle CSV Export with Permission Check
   const handleExport = async () => {
+    // 1. Check Plan Logic Client-Side First (Fast Feedback)
+    if (!isPro) {
+        openUpgradeModal("Exporting data to CSV is a Pro feature.");
+        return;
+    }
+
     try {
       setIsExporting(true);
       const blob = await api.trades.export();
       
-      // Create a link and trigger download
       const url = window.URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
@@ -52,19 +81,23 @@ export const Trades = () => {
       document.body.appendChild(a);
       a.click();
       
-      // Cleanup
       window.URL.revokeObjectURL(url);
       document.body.removeChild(a);
       
       toast({ title: "Success", description: "Trades exported successfully." });
-    } catch (error) {
-      toast({ title: "Export Failed", description: "Could not download trades.", variant: "destructive" });
+    } catch (error: any) {
+      // 2. Catch Backend 403 just in case
+      if (error instanceof ApiError && error.status === 403) {
+          openUpgradeModal("Exporting data to CSV is a Pro feature.");
+      } else {
+          toast({ title: "Export Failed", description: "Could not download trades.", variant: "destructive" });
+      }
     } finally {
       setIsExporting(false);
     }
   };
 
-  // --- Format Helpers (Restored from Original) ---
+  // --- Format Helpers ---
   const formatDate = (isoString: string | null) => {
     if (!isoString) return { date: "-", time: "-" };
     const date = new Date(isoString);
@@ -74,7 +107,6 @@ export const Trades = () => {
     };
   };
 
-  // ✅ Helper to calculate R-Multiple dynamically (Restored)
   const calculateRMultiple = (pnl: number, entry: number, stop: number | null, qty: number) => {
     if (!stop || stop === 0) return 0;
     const riskPerShare = Math.abs(entry - stop);
@@ -83,8 +115,6 @@ export const Trades = () => {
     return pnl / totalRisk;
   };
 
-  // ✅ Transform DB data to UI Model (Restored)
-  // This ensures TradeCard receives the correct "pl", "entry", "exit" shapes
   const mapTradeToCard = (trade: any) => {
     const entry = formatDate(trade.entry_time);
     const exit = formatDate(trade.exit_time);
@@ -121,20 +151,14 @@ export const Trades = () => {
     };
   };
 
-  // --- Filtering Logic (Applied to current page) ---
+  // --- Filtering Logic ---
   const processedTrades = (trades || [])
     .map(mapTradeToCard)
     .filter((trade) => {
-      // 1. Tab Filter
       if (activeTab === "winning" && trade.pl <= 0) return false;
       if (activeTab === "losing" && trade.pl >= 0) return false;
-
-      // 2. Instrument Filter
       if (filterInstrument !== "all-instruments" && trade.instrument_type !== filterInstrument.toUpperCase()) return false;
-
-      // 3. Direction Filter
       if (filterDirection !== "all-directions" && trade.direction.toLowerCase() !== filterDirection.toLowerCase()) return false;
-
       return true;
     });
 
@@ -149,24 +173,37 @@ export const Trades = () => {
               <p className="text-sm sm:text-base text-muted-foreground">Manage and analyze your trading history</p>
             </div>
             <div className="flex gap-2 sm:gap-3">
-              {/* ✅ Updated Export Button */}
+              {/* ✅ CSV Export Button with PRO Logic */}
               <Button 
                 variant="outline" 
-                className="flex-1 sm:flex-none" 
+                className="flex-1 sm:flex-none relative group" 
                 onClick={handleExport}
                 disabled={isExporting}
               >
                 {isExporting ? (
                   <Loader2 className="h-4 w-4 sm:mr-2 animate-spin" />
+                ) : !isPro ? (
+                   // Locked State Icon for Free Users
+                   <Lock className="h-3.5 w-3.5 sm:mr-2 text-amber-600" />
                 ) : (
-                  <Download className="h-4 w-4 sm:mr-2" />
+                   // Normal Icon for PRO/FOUNDER
+                   <Download className="h-4 w-4 sm:mr-2" />
                 )}
+                
                 <span className="hidden sm:inline">Export</span>
+                
+                {/* Pro Badge Overlay for Free Users */}
+                {!isPro && (
+                    <span className="absolute -top-2 -right-2 bg-amber-500 text-white text-[9px] px-1.5 py-0.5 rounded-full font-bold shadow-sm">
+                        PRO
+                    </span>
+                )}
               </Button>
 
+              {/* ✅ Add Trade Button with Limit Check */}
               <Button 
                 className="flex-1 sm:flex-none bg-[#00d4ff] hover:bg-[#00b8e0] text-black"
-                onClick={() => setIsAddTradeOpen(true)}
+                onClick={handleAddTradeClick}
               >
                 <Plus className="h-4 w-4 sm:mr-2" />
                 <span className="hidden sm:inline">Add Trade</span>
@@ -194,7 +231,7 @@ export const Trades = () => {
               </CollapsibleTrigger>
               <CollapsibleContent className="px-4 pb-4 sm:px-6 sm:pb-6">
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-3 pt-4 border-t border-border/50">
-                  {/* Symbol Search - Resets page on change */}
+                  {/* Symbol Search */}
                   <div className="relative">
                     <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                     <Input 
@@ -342,7 +379,7 @@ export const Trades = () => {
                 </Table>
               </div>
               
-              {/* ✅ Pagination Controls */}
+              {/* Pagination Controls */}
               <div className="border-t border-border/50 p-4 flex items-center justify-between">
                 <p className="text-sm text-muted-foreground">
                     Showing {((page - 1) * pageSize) + 1} to {Math.min(page * pageSize, total)} of {total} trades
@@ -378,9 +415,9 @@ export const Trades = () => {
                  <Skeleton key={i} className="h-40 w-full rounded-xl" />
                ))
             ) : (
-                processedTrades.map((trade) => (
-                  <TradeCard key={trade.id} trade={trade} onClick={() => navigate(`/trades/${trade.id}`)} />
-                ))
+               processedTrades.map((trade) => (
+                 <TradeCard key={trade.id} trade={trade} onClick={() => navigate(`/trades/${trade.id}`)} />
+               ))
             )}
             
             {/* Mobile Pagination */}

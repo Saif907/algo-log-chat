@@ -4,7 +4,7 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
 import { format } from "date-fns";
-import { Loader2, DollarSign, Target, BookOpen } from "lucide-react";
+import { Loader2, DollarSign, Target, Lock, CloudUpload } from "lucide-react";
 
 import {
   Dialog,
@@ -16,7 +16,6 @@ import {
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import {
   Select,
@@ -43,9 +42,10 @@ import { useStrategies } from "@/hooks/use-strategies";
 import { cn } from "@/lib/utils";
 import { api } from "@/services/api";
 import { useToast } from "@/hooks/use-toast";
+import { useAuth } from "@/contexts/AuthContext";
+import { useModal } from "@/contexts/ModalContext";
 
-/* -------------------- Schema -------------------- */
-// Use preprocessors to convert datetime-local string -> Date
+/* -------------------- Schema with Strict Logic -------------------- */
 const formSchema = z
   .object({
     symbol: z.string().min(1, "Symbol is required").transform((s) => s.toUpperCase()),
@@ -57,22 +57,37 @@ const formSchema = z
     quantity: z.coerce.number().positive("Quantity must be positive"),
 
     exit_price: z.coerce.number().optional(),
-
     stop_loss: z.coerce.number().optional(),
     target: z.coerce.number().optional(),
     fees: z.coerce.number().optional().default(0),
 
-    // date/time as datetime-local string -> Date
-    entry_datetime: z.preprocess((val) => (val ? new Date(val as string) : val), z.date()),
-    exit_datetime: z.preprocess((val) => (val ? new Date(val as string) : val), z.date().optional()),
+    entry_datetime: z.preprocess((val) => {
+      if (typeof val === "string" && val) return new Date(val);
+      return val;
+    }, z.date({ required_error: "Entry Date is required" })),
+
+    exit_datetime: z.preprocess((val) => {
+      if (typeof val === "string" && val) return new Date(val);
+      return val;
+    }, z.date().optional()),
 
     strategy_id: z.string().optional(),
     notes: z.string().optional(),
-
-    // screenshots will be an array of File objects client-side; we accept optional array here
     screenshots: z.array(z.any()).optional(),
   })
   .superRefine((data, ctx) => {
+    const now = new Date();
+
+    // 1. Future Entry Date Check
+    if (data.entry_datetime > now) {
+        ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            message: "Entry date cannot be in the future",
+            path: ["entry_datetime"],
+        });
+    }
+
+    // 2. Closed Trade Validation
     if (data.status === "CLOSED") {
       if (!data.exit_price || data.exit_price <= 0) {
         ctx.addIssue({
@@ -87,31 +102,60 @@ const formSchema = z
           message: "Exit Date/Time is required",
           path: ["exit_datetime"],
         });
-      }
-      if (data.exit_datetime && data.entry_datetime) {
+      } else {
+        if (data.exit_datetime > now) {
+            ctx.addIssue({
+                code: z.ZodIssueCode.custom,
+                message: "Exit date cannot be in the future",
+                path: ["exit_datetime"],
+            });
+        }
         if (data.exit_datetime < data.entry_datetime) {
           ctx.addIssue({
             code: z.ZodIssueCode.custom,
-            message: "Exit cannot be before Entry",
+            message: "Exit cannot be before Entry time",
             path: ["exit_datetime"],
           });
         }
       }
     }
 
-    if (data.stop_loss) {
+    // ✅ 3. STRICT STOP LOSS LOGIC
+    if (data.stop_loss && data.stop_loss > 0 && data.entry_price > 0) {
+      // LONG: SL must be LOWER than Entry
       if (data.direction === "LONG" && data.stop_loss >= data.entry_price) {
         ctx.addIssue({
           code: z.ZodIssueCode.custom,
-          message: "Stop Loss must be below Entry for Longs",
+          message: "Long Trade: Stop Loss must be BELOW Entry",
           path: ["stop_loss"],
         });
       }
+      // SHORT: SL must be HIGHER than Entry
       if (data.direction === "SHORT" && data.stop_loss <= data.entry_price) {
         ctx.addIssue({
           code: z.ZodIssueCode.custom,
-          message: "Stop Loss must be above Entry for Shorts",
+          message: "Short Trade: Stop Loss must be ABOVE Entry",
           path: ["stop_loss"],
+        });
+      }
+    }
+
+    // ✅ 4. STRICT TARGET LOGIC
+    if (data.target && data.target > 0 && data.entry_price > 0) {
+      // LONG: Target must be HIGHER than Entry
+      if (data.direction === "LONG" && data.target <= data.entry_price) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: "Long Trade: Target must be ABOVE Entry",
+          path: ["target"],
+        });
+      }
+      // SHORT: Target must be LOWER than Entry
+      if (data.direction === "SHORT" && data.target >= data.entry_price) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: "Short Trade: Target must be BELOW Entry",
+          path: ["target"],
         });
       }
     }
@@ -124,17 +168,8 @@ interface Props {
   onOpenChange: (open: boolean) => void;
 }
 
-/* -------------------- Upload Helper (UPDATED) -------------------- */
-/**
- * Upload screenshots for a given tradeId using backend endpoint.
- * After uploading files, fetches signed URLs and returns them.
- *
- * Throws if uploading fails.
- */
 async function uploadTradeScreenshotsAndGetUrls(tradeId: string, files: File[]): Promise<string[]> {
   if (!files || files.length === 0) return [];
-
-  // Upload each file (sequential to keep it simple and avoid race conditions)
   for (const file of files) {
     if (!(file instanceof File)) continue;
     const resp = await api.trades.uploadScreenshot(tradeId, file);
@@ -142,34 +177,31 @@ async function uploadTradeScreenshotsAndGetUrls(tradeId: string, files: File[]):
       throw new Error(`Upload failed for ${file.name}`);
     }
   }
-
-  // After upload finishes, fetch signed URLs for the trade
   const signed = await api.trades.getScreenshots(tradeId);
-  // signed.files is expected to be array of { url, uploaded_at }
   return (signed.files || []).map((f: any) => f.url).filter(Boolean);
 }
 
-/* -------------------- Component -------------------- */
 export const AddTradeModal = ({ open, onOpenChange }: Props) => {
   const { createTrade } = useTrades();
   const { strategies } = useStrategies();
   const { toast } = useToast();
+  const { plan } = useAuth();
+  const { openUpgradeModal } = useModal();
+  const isPro = plan === "PRO" || plan === "FOUNDER";
 
   const [showAdvanced, setShowAdvanced] = useState(false);
-
-  // Preview URLs for thumbnails (revoke on change)
   const [previewUrls, setPreviewUrls] = useState<string[]>([]);
-  // Signed URLs after upload (optional, for immediate UI use)
   const [signedUrls, setSignedUrls] = useState<string[]>([]);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
-  // Defaults
   const now = new Date();
   const nowLocal = format(now, "yyyy-MM-dd'T'HH:mm");
 
   const form = useForm<FormValues>({
     resolver: zodResolver(formSchema),
+    mode: "onChange", // ✅ Instant Validation Feedback
     defaultValues: {
-      status: "CLOSED", // user requested default CLOSED
+      status: "CLOSED",
       symbol: "",
       instrument_type: "STOCK",
       direction: "LONG",
@@ -182,21 +214,21 @@ export const AddTradeModal = ({ open, onOpenChange }: Props) => {
   });
 
   const watchValues = form.watch();
+  
+  const entryDateObj = watchValues.entry_datetime 
+    ? new Date(watchValues.entry_datetime as unknown as string) 
+    : undefined;
 
-  // Keep preview URLs in sync with screenshots array
   useEffect(() => {
     const files: File[] = (watchValues.screenshots as any) || [];
-    // Revoke previous
     previewUrls.forEach((u) => URL.revokeObjectURL(u));
     const urls = files.map((f) => URL.createObjectURL(f));
     setPreviewUrls(urls);
     return () => {
       urls.forEach((u) => URL.revokeObjectURL(u));
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [watchValues.screenshots]);
 
-  // Reset when modal closes
   useEffect(() => {
     if (!open) {
       form.reset();
@@ -205,10 +237,8 @@ export const AddTradeModal = ({ open, onOpenChange }: Props) => {
       setPreviewUrls([]);
       setSignedUrls([]);
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open]);
 
-  // When status toggles, auto-populate/clear exit datetime fields
   useEffect(() => {
     if (watchValues.status === "CLOSED") {
       if (!watchValues.exit_datetime) form.setValue("exit_datetime", (nowLocal as unknown) as any);
@@ -216,17 +246,13 @@ export const AddTradeModal = ({ open, onOpenChange }: Props) => {
       form.setValue("exit_datetime", undefined);
       form.setValue("exit_price", undefined);
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [watchValues.status]);
 
   const getStep = (instrument?: FormValues["instrument_type"]) => {
     switch (instrument) {
-      case "CRYPTO":
-        return "0.0001";
-      case "FOREX":
-        return "0.0001";
-      default:
-        return "0.01";
+      case "CRYPTO": return "0.0001";
+      case "FOREX": return "0.0001";
+      default: return "0.01";
     }
   };
 
@@ -251,21 +277,23 @@ export const AddTradeModal = ({ open, onOpenChange }: Props) => {
 
   const rrRatio = calculateRR();
   const pnl = calculatePnL();
-
-  // Client-side constraints for screenshots
   const MAX_FILES = 5;
-  const MAX_FILE_SIZE = 5 * 1024 * 1024; // 5MB per file
+  const MAX_FILE_SIZE = 5 * 1024 * 1024; 
 
   const handleFilesAdd = (incoming: FileList | File[]) => {
+    if (!isPro) {
+        openUpgradeModal("Attach screenshots to your trades to analyze patterns visually. Upgrade to PRO.");
+        return;
+    }
     const existing: File[] = (watchValues.screenshots as any) || [];
     const incomingArr = Array.from(incoming as FileList);
     const allowedToAdd = Math.max(0, MAX_FILES - existing.length);
     const candidates = incomingArr.slice(0, allowedToAdd);
     const valid: File[] = [];
+    
     for (const f of candidates) {
       if (f.size > MAX_FILE_SIZE) {
-        // show toast for oversize file
-        toast({ title: "File too large", description: `${f.name} exceeds ${MAX_FILE_SIZE / (1024 * 1024)}MB and was skipped`, variant: "destructive" });
+        toast({ title: "File too large", description: `${f.name} exceeds 5MB`, variant: "destructive" });
         continue;
       }
       valid.push(f);
@@ -277,6 +305,10 @@ export const AddTradeModal = ({ open, onOpenChange }: Props) => {
   const handleDrop = (e: React.DragEvent) => {
     e.preventDefault();
     e.stopPropagation();
+    if (!isPro) {
+        openUpgradeModal("Attach screenshots to your trades to analyze patterns visually. Upgrade to PRO.");
+        return;
+    }
     if (e.dataTransfer?.files?.length) {
       handleFilesAdd(e.dataTransfer.files);
     }
@@ -289,13 +321,9 @@ export const AddTradeModal = ({ open, onOpenChange }: Props) => {
     form.setValue("screenshots", copy);
   };
 
-  // submission state covering both create + uploads
-  const [isSubmitting, setIsSubmitting] = useState(false);
-
   const onSubmit = async (values: FormValues) => {
     setIsSubmitting(true);
     try {
-      // Build payload for trade creation (do NOT include screenshots here - backend will manage attachments)
       const entryIso = (values.entry_datetime as unknown as Date).toISOString();
       const exitIso = values.exit_datetime ? (values.exit_datetime as unknown as Date).toISOString() : undefined;
 
@@ -316,10 +344,8 @@ export const AddTradeModal = ({ open, onOpenChange }: Props) => {
         notes: values.notes || undefined,
       };
 
-      // 1) Create trade
       const created = await createTrade.mutateAsync(payload);
 
-      // 2) If there are screenshots, upload them now (backend attaches to the trade)
       const filesToUpload: File[] = (values.screenshots as any) || [];
       if (filesToUpload.length > 0) {
         try {
@@ -327,14 +353,12 @@ export const AddTradeModal = ({ open, onOpenChange }: Props) => {
           setSignedUrls(urls);
           toast({ title: "Screenshots uploaded", description: `${urls.length} files attached`, variant: "default" });
         } catch (uploadErr: any) {
-          // Inform user that trade was created but screenshots failed
           console.error("Screenshot upload error:", uploadErr);
           toast({
             title: "Partial success",
-            description: `Trade created but screenshot upload failed: ${String(uploadErr?.message || uploadErr)}`,
+            description: "Trade created but screenshot upload failed.",
             variant: "destructive",
           });
-          // do not throw further — trade is created
         }
       }
 
@@ -346,6 +370,78 @@ export const AddTradeModal = ({ open, onOpenChange }: Props) => {
     } finally {
       setIsSubmitting(false);
     }
+  };
+
+  const DatePickerField = ({ 
+    field, 
+    label, 
+    minDate 
+  }: { 
+    field: any, 
+    label: string, 
+    minDate?: Date 
+  }) => {
+    const current = field.value as string | undefined;
+    const now = new Date();
+    
+    return (
+        <FormItem>
+          <FormLabel className="text-xs">{label}</FormLabel>
+          <div className="block sm:hidden">
+            <FormControl>
+                <Input 
+                    type="datetime-local" 
+                    value={current || nowLocal} 
+                    max={format(now, "yyyy-MM-dd'T'HH:mm")}
+                    min={minDate ? format(minDate, "yyyy-MM-dd'T'HH:mm") : undefined}
+                    onChange={(e) => field.onChange(e.target.value)} 
+                />
+            </FormControl>
+          </div>
+          <div className="hidden sm:block">
+            <Popover>
+              <PopoverTrigger asChild>
+                <Button variant="outline" className={cn("w-full text-left font-normal px-3", !current && "text-muted-foreground")}>
+                  {current ? format(new Date(current), "MMM d, HH:mm") : "Select date"}
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent className="w-auto p-3" align="start">
+                <div className="flex flex-col sm:flex-row gap-3">
+                  <Calendar
+                    mode="single"
+                    selected={current ? new Date(current) : now}
+                    disabled={(date) => {
+                        const isFuture = date > now;
+                        const isBeforeEntry = minDate ? date < new Date(minDate.setHours(0,0,0,0)) : false;
+                        return isFuture || isBeforeEntry;
+                    }}
+                    onSelect={(date) => {
+                      if (!date) return;
+                      const currentTime = current ? format(new Date(current), "HH:mm") : format(now, "HH:mm");
+                      const combined = format(date, "yyyy-MM-dd") + "T" + currentTime;
+                      field.onChange(combined);
+                    }}
+                    initialFocus
+                  />
+                  <div className="flex flex-col gap-2 w-40">
+                    <FormLabel className="text-xs">Time</FormLabel>
+                    <Input
+                      type="time"
+                      value={current ? format(new Date(current), "HH:mm") : format(now, "HH:mm")}
+                      onChange={(e) => {
+                        const datePart = current ? format(new Date(current), "yyyy-MM-dd") : format(now, "yyyy-MM-dd");
+                        const combined = datePart + "T" + e.target.value;
+                        field.onChange(combined);
+                      }}
+                    />
+                  </div>
+                </div>
+              </PopoverContent>
+            </Popover>
+          </div>
+          <FormMessage />
+        </FormItem>
+    );
   };
 
   return (
@@ -366,7 +462,7 @@ export const AddTradeModal = ({ open, onOpenChange }: Props) => {
               }
             }}
           >
-            {/* Status control */}
+            {/* Status */}
             <FormField
               control={form.control}
               name="status"
@@ -383,7 +479,7 @@ export const AddTradeModal = ({ open, onOpenChange }: Props) => {
               )}
             />
 
-            {/* Symbol / Type / Direction grid */}
+            {/* Main Details */}
             <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-12 gap-3">
               <div className="md:col-span-5">
                 <FormField
@@ -403,7 +499,6 @@ export const AddTradeModal = ({ open, onOpenChange }: Props) => {
                   )}
                 />
               </div>
-
               <div className="sm:col-span-1 md:col-span-3">
                 <FormField
                   control={form.control}
@@ -411,25 +506,19 @@ export const AddTradeModal = ({ open, onOpenChange }: Props) => {
                   render={({ field }) => (
                     <FormItem>
                       <FormLabel className="text-xs">Type</FormLabel>
-                      <FormControl>
-                        <Select onValueChange={field.onChange} defaultValue={field.value}>
-                          <SelectTrigger>
-                            <SelectValue />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="STOCK">Stock</SelectItem>
-                            <SelectItem value="CRYPTO">Crypto</SelectItem>
-                            <SelectItem value="FUTURES">Futures</SelectItem>
-                            <SelectItem value="FOREX">Forex</SelectItem>
-                          </SelectContent>
-                        </Select>
-                      </FormControl>
-                      <FormMessage />
+                      <Select onValueChange={field.onChange} defaultValue={field.value}>
+                        <SelectTrigger><SelectValue /></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="STOCK">Stock</SelectItem>
+                          <SelectItem value="CRYPTO">Crypto</SelectItem>
+                          <SelectItem value="FUTURES">Futures</SelectItem>
+                          <SelectItem value="FOREX">Forex</SelectItem>
+                        </SelectContent>
+                      </Select>
                     </FormItem>
                   )}
                 />
               </div>
-
               <div className="sm:col-span-1 md:col-span-4">
                 <FormField
                   control={form.control}
@@ -437,85 +526,30 @@ export const AddTradeModal = ({ open, onOpenChange }: Props) => {
                   render={({ field }) => (
                     <FormItem>
                       <FormLabel className="text-xs">Direction</FormLabel>
-                      <FormControl>
-                        <Tabs value={field.value} onValueChange={(v: any) => field.onChange(v)} className="w-full">
-                          <TabsList className="grid grid-cols-2 gap-1">
-                            <TabsTrigger value="LONG" className="data-[state=active]:bg-green-500/10 data-[state=active]:text-green-600">Long</TabsTrigger>
-                            <TabsTrigger value="SHORT" className="data-[state=active]:bg-red-500/10 data-[state=active]:text-red-600">Short</TabsTrigger>
-                          </TabsList>
-                        </Tabs>
-                      </FormControl>
+                      <Tabs value={field.value} onValueChange={(v: any) => field.onChange(v)} className="w-full">
+                        <TabsList className="grid grid-cols-2 gap-1">
+                          <TabsTrigger value="LONG" className="data-[state=active]:bg-green-500/10 data-[state=active]:text-green-600">Long</TabsTrigger>
+                          <TabsTrigger value="SHORT" className="data-[state=active]:bg-red-500/10 data-[state=active]:text-red-600">Short</TabsTrigger>
+                        </TabsList>
+                      </Tabs>
                     </FormItem>
                   )}
                 />
               </div>
             </div>
 
-            {/* Entry block (date+time combined) */}
+            {/* Entry Section */}
             <section className="space-y-2">
               <h3 className="text-sm font-medium">Entry</h3>
-
               <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3">
+                
+                {/* Entry Date */}
                 <FormField
                   control={form.control}
                   name="entry_datetime"
-                  render={({ field }) => {
-                    const current = field.value as string | undefined;
-                    return (
-                      <FormItem>
-                        <FormLabel className="text-xs">Date & Time</FormLabel>
-
-                        {/* Mobile: native picker */}
-                        <div className="block sm:hidden">
-                          <FormControl>
-                            <Input type="datetime-local" value={current || nowLocal} onChange={(e) => field.onChange(e.target.value)} />
-                          </FormControl>
-                        </div>
-
-                        {/* Desktop: popover with calendar + time */}
-                        <div className="hidden sm:block">
-                          <Popover>
-                            <PopoverTrigger asChild>
-                              <Button variant="outline" className="w-full text-left">
-                                {current ? format(new Date(current), "MMM d, yyyy — HH:mm") : "Select date & time"}
-                              </Button>
-                            </PopoverTrigger>
-                            <PopoverContent className="w-auto p-3">
-                              <div className="flex flex-col sm:flex-row gap-3">
-                                <Calendar
-                                  mode="single"
-                                  selected={current ? new Date(current) : new Date()}
-                                  onSelect={(date) => {
-                                    if (!date) return;
-                                    const t = current ? format(new Date(current), "HH:mm") : format(new Date(), "HH:mm");
-                                    const combined = format(date, "yyyy-MM-dd") + "T" + t;
-                                    field.onChange(combined);
-                                  }}
-                                />
-
-                                <div className="flex flex-col gap-2 w-40">
-                                  <FormLabel className="text-xs">Time</FormLabel>
-                                  <Input
-                                    type="time"
-                                    value={current ? format(new Date(current), "HH:mm") : format(new Date(), "HH:mm")}
-                                    onChange={(e) => {
-                                      const datePart = current ? format(new Date(current), "yyyy-MM-dd") : format(new Date(), "yyyy-MM-dd");
-                                      const combined = datePart + "T" + e.target.value;
-                                      field.onChange(combined);
-                                    }}
-                                  />
-                                </div>
-                              </div>
-                            </PopoverContent>
-                          </Popover>
-                        </div>
-
-                        <FormMessage />
-                      </FormItem>
-                    );
-                  }}
+                  render={({ field }) => <DatePickerField field={field} label="Date & Time" />}
                 />
-
+                
                 <FormField
                   control={form.control}
                   name="entry_price"
@@ -537,18 +571,16 @@ export const AddTradeModal = ({ open, onOpenChange }: Props) => {
                     <FormItem>
                       <FormLabel className="text-xs">Qty / Lots</FormLabel>
                       <FormControl>
-                        <Input type="number" step="1" placeholder="0" {...field} />
+                        <Input type="number" step="any" placeholder="0" {...field} />
                       </FormControl>
                       <FormMessage />
                     </FormItem>
                   )}
                 />
-
-                <div className="hidden md:block" />
               </div>
             </section>
 
-            {/* Exit block */}
+            {/* Exit Section */}
             {watchValues.status === "CLOSED" && (
               <section className="space-y-2 pt-3 border-t">
                 <div className="flex items-center justify-between">
@@ -559,118 +591,63 @@ export const AddTradeModal = ({ open, onOpenChange }: Props) => {
                     </div>
                   )}
                 </div>
-
                 <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3">
-                  <FormField
-                    control={form.control}
-                    name="exit_datetime"
-                    render={({ field }) => {
-                      const current = field.value as string | undefined;
-                      return (
+                   {/* Exit Date */}
+                   <FormField
+                      control={form.control}
+                      name="exit_datetime"
+                      render={({ field }) => (
+                        <DatePickerField 
+                            field={field} 
+                            label="Date & Time" 
+                            minDate={entryDateObj} 
+                        />
+                      )}
+                    />
+                    <FormField
+                      control={form.control}
+                      name="exit_price"
+                      render={({ field }) => (
                         <FormItem>
-                          <FormLabel className="text-xs">Date & Time</FormLabel>
-
-                          <div className="block sm:hidden">
-                            <FormControl>
-                              <Input type="datetime-local" value={current || nowLocal} onChange={(e) => field.onChange(e.target.value)} />
-                            </FormControl>
-                          </div>
-
-                          <div className="hidden sm:block">
-                            <Popover>
-                              <PopoverTrigger asChild>
-                                <Button variant="outline" className="w-full text-left">
-                                  {current ? format(new Date(current), "MMM d, yyyy — HH:mm") : "Select date & time"}
-                                </Button>
-                              </PopoverTrigger>
-                              <PopoverContent className="w-auto p-3">
-                                <div className="flex flex-col sm:flex-row gap-3">
-                                  <Calendar
-                                    mode="single"
-                                    selected={current ? new Date(current) : new Date()}
-                                    onSelect={(date) => {
-                                      if (!date) return;
-                                      const t = current ? format(new Date(current), "HH:mm") : format(new Date(), "HH:mm");
-                                      const combined = format(date, "yyyy-MM-dd") + "T" + t;
-                                      field.onChange(combined);
-                                    }}
-                                  />
-
-                                  <div className="flex flex-col gap-2 w-40">
-                                    <FormLabel className="text-xs">Time</FormLabel>
-                                    <Input
-                                      type="time"
-                                      value={current ? format(new Date(current), "HH:mm") : format(new Date(), "HH:mm")}
-                                      onChange={(e) => {
-                                        const datePart = current ? format(new Date(current), "yyyy-MM-dd") : format(new Date(), "yyyy-MM-dd");
-                                        const combined = datePart + "T" + e.target.value;
-                                        field.onChange(combined);
-                                      }}
-                                    />
-                                  </div>
-                                </div>
-                              </PopoverContent>
-                            </Popover>
-                          </div>
-
+                          <FormLabel className="text-xs">Exit Price</FormLabel>
+                          <Input type="number" step={getStep(watchValues.instrument_type)} placeholder="0.00" {...field} />
                           <FormMessage />
                         </FormItem>
-                      );
-                    }}
-                  />
-
-                  <FormField
-                    control={form.control}
-                    name="exit_price"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel className="text-xs">Exit Price</FormLabel>
-                        <FormControl>
-                          <Input type="number" step={getStep(watchValues.instrument_type)} placeholder="0.00" {...field} />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-
-                  <FormField
-                    control={form.control}
-                    name="fees"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel className="text-xs">Fees / Comm.</FormLabel>
-                        <FormControl>
+                      )}
+                    />
+                    <FormField
+                      control={form.control}
+                      name="fees"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel className="text-xs">Fees</FormLabel>
                           <Input type="number" step="0.01" placeholder="0.00" {...field} />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-
-                  <div />
+                        </FormItem>
+                      )}
+                    />
                 </div>
               </section>
             )}
 
-            {/* Additional details toggle */}
+            {/* Advanced Toggle */}
             <div className="pt-2">
               <Button type="button" variant="ghost" size="sm" onClick={() => setShowAdvanced((v) => !v)}>
                 {showAdvanced ? "Hide additional details" : "Add additional details"}
               </Button>
             </div>
 
-            {/* Advanced: Risk, Strategy, Notes, Screenshots */}
+            {/* Advanced Section */}
             {showAdvanced && (
-              <section className="space-y-4 pt-3 border-t">
+              <section className="space-y-4 pt-3 border-t animate-in slide-in-from-top-2 duration-200">
+                {/* Risk Management */}
                 <div>
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-2 text-xs text-muted-foreground">
                       <Target className="w-4 h-4" />
-                      <div className="font-medium">Risk Planning (Optional)</div>
+                      <div className="font-medium">Risk Planning</div>
                     </div>
                     {rrRatio && <Badge variant="outline" className="text-xs">1 : {rrRatio} RR</Badge>}
                   </div>
-
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-2">
                     <FormField
                       control={form.control}
@@ -678,23 +655,18 @@ export const AddTradeModal = ({ open, onOpenChange }: Props) => {
                       render={({ field }) => (
                         <FormItem>
                           <FormLabel className="text-xs">Stop Loss</FormLabel>
-                          <FormControl>
-                            <Input type="number" step={getStep(watchValues.instrument_type)} {...field} />
-                          </FormControl>
+                          <Input type="number" step={getStep(watchValues.instrument_type)} {...field} />
                           <FormMessage />
                         </FormItem>
                       )}
                     />
-
                     <FormField
                       control={form.control}
                       name="target"
                       render={({ field }) => (
                         <FormItem>
                           <FormLabel className="text-xs">Target</FormLabel>
-                          <FormControl>
-                            <Input type="number" step={getStep(watchValues.instrument_type)} {...field} />
-                          </FormControl>
+                          <Input type="number" step={getStep(watchValues.instrument_type)} {...field} />
                           <FormMessage />
                         </FormItem>
                       )}
@@ -702,22 +674,16 @@ export const AddTradeModal = ({ open, onOpenChange }: Props) => {
                   </div>
                 </div>
 
-                <div>
-                  <div className="flex items-center gap-2 text-xs text-muted-foreground mb-1">
-                    <BookOpen className="w-4 h-4" />
-                    <div className="font-medium">Strategy (Optional)</div>
-                  </div>
-
-                  <FormField
-                    control={form.control}
-                    name="strategy_id"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormControl>
+                {/* Strategy & Notes */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <FormField
+                      control={form.control}
+                      name="strategy_id"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel className="text-xs">Strategy</FormLabel>
                           <Select onValueChange={field.onChange} defaultValue={field.value}>
-                            <SelectTrigger>
-                              <SelectValue placeholder="Select Playbook..." />
-                            </SelectTrigger>
+                            <SelectTrigger><SelectValue placeholder="Select Playbook..." /></SelectTrigger>
                             <SelectContent>
                               <SelectItem value="none">No Strategy</SelectItem>
                               {strategies?.map((s) => (
@@ -725,48 +691,78 @@ export const AddTradeModal = ({ open, onOpenChange }: Props) => {
                               ))}
                             </SelectContent>
                           </Select>
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
+                        </FormItem>
+                      )}
+                    />
+                    <FormField
+                      control={form.control}
+                      name="notes"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel className="text-xs">Notes</FormLabel>
+                          <Textarea placeholder="Trades thesis..." className="min-h-[40px] resize-none" {...field} />
+                        </FormItem>
+                      )}
+                    />
                 </div>
 
-                <FormField
-                  control={form.control}
-                  name="notes"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel className="text-xs">Notes / Mistakes (Optional)</FormLabel>
-                      <FormControl>
-                        <Textarea placeholder="What was your thesis?" className="min-h-[70px] resize-none" {...field} />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-
-                {/* Screenshots upload */}
+                {/* Screenshots (PRO ONLY) */}
                 <FormField
                   control={form.control}
                   name="screenshots"
                   render={({ field }) => {
                     const files: File[] = (field.value as any) || [];
+                    
                     return (
                       <FormItem>
-                        <FormLabel className="text-xs">Screenshots (Optional)</FormLabel>
+                        <div className="flex items-center justify-between">
+                            <FormLabel className="text-xs">Screenshots</FormLabel>
+                            {!isPro && (
+                                <Badge variant="default" className="bg-amber-500 hover:bg-amber-600 text-[10px] h-5 px-1.5">
+                                    <Lock className="w-3 h-3 mr-1" /> PRO
+                                </Badge>
+                            )}
+                        </div>
                         <FormControl>
                           <div
                             onDrop={handleDrop}
                             onDragOver={(e) => e.preventDefault()}
-                            className="rounded-lg border border-dashed border-border p-3 bg-muted/10"
+                            onClick={() => {
+                                if (!isPro) openUpgradeModal("Attach screenshots to visually analyze your trades. Upgrade to PRO.");
+                            }}
+                            className={cn(
+                                "relative rounded-lg border border-dashed border-border p-4 transition-all",
+                                isPro 
+                                    ? "bg-muted/10 hover:bg-muted/20 cursor-pointer" 
+                                    : "bg-muted/30 cursor-not-allowed opacity-80"
+                            )}
                           >
                             <label
                               htmlFor="screenshot-upload"
-                              className="flex flex-col items-center justify-center gap-1 cursor-pointer text-sm text-muted-foreground"
+                              className={cn(
+                                  "flex flex-col items-center justify-center gap-2 text-sm text-muted-foreground",
+                                  !isPro && "pointer-events-none"
+                              )}
                             >
-                              <div className="font-medium text-foreground">Click to upload or drag & drop</div>
-                              <div className="text-xs">PNG, JPG — up to {MAX_FILES} images • max {MAX_FILE_SIZE / (1024 * 1024)}MB each</div>
+                              {isPro ? (
+                                  <>
+                                    <CloudUpload className="w-8 h-8 text-muted-foreground/50" />
+                                    <div className="text-center">
+                                        <div className="font-medium text-foreground">Click to upload or drag & drop</div>
+                                        <div className="text-xs">PNG, JPG • up to {MAX_FILES} images</div>
+                                    </div>
+                                  </>
+                              ) : (
+                                  <>
+                                    <div className="w-10 h-10 rounded-full bg-amber-500/10 flex items-center justify-center">
+                                        <Lock className="w-5 h-5 text-amber-600" />
+                                    </div>
+                                    <div className="text-center">
+                                        <div className="font-bold text-foreground">Unlock Screenshots</div>
+                                        <div className="text-xs text-muted-foreground mt-1">Upgrade to PRO to attach charts</div>
+                                    </div>
+                                  </>
+                              )}
 
                               <input
                                 id="screenshot-upload"
@@ -774,10 +770,10 @@ export const AddTradeModal = ({ open, onOpenChange }: Props) => {
                                 accept="image/*"
                                 multiple
                                 className="hidden"
+                                disabled={!isPro} 
                                 onChange={(e) => {
                                   if (!e.target.files) return;
                                   handleFilesAdd(e.target.files);
-                                  // reset input so same file can be selected again if user removed it
                                   e.currentTarget.value = "";
                                 }}
                               />
@@ -787,32 +783,20 @@ export const AddTradeModal = ({ open, onOpenChange }: Props) => {
                             {files.length > 0 && (
                               <div className="mt-3 grid grid-cols-3 sm:grid-cols-4 gap-2">
                                 {files.map((f, i) => (
-                                  <div key={i} className="relative rounded-md overflow-hidden border">
-                                    <img src={previewUrls[i]} alt={f.name} className="h-20 w-full object-cover" />
+                                  <div key={i} className="relative rounded-md overflow-hidden border group">
+                                    <img src={previewUrls[i]} alt={f.name} className="h-16 w-full object-cover" />
                                     <button
                                       type="button"
-                                      onClick={() => removeScreenshot(i)}
-                                      className="absolute top-1 right-1 rounded-full bg-background/90 p-1 text-xs opacity-80"
-                                      aria-label={`Remove ${f.name}`}
+                                      onClick={(e) => {
+                                          e.stopPropagation();
+                                          removeScreenshot(i);
+                                      }}
+                                      className="absolute top-1 right-1 rounded-full bg-background/90 p-1 text-xs opacity-0 group-hover:opacity-100 transition-opacity"
                                     >
                                       ✕
                                     </button>
                                   </div>
                                 ))}
-                              </div>
-                            )}
-
-                            {/* Signed URLs (if upload completed in same modal) */}
-                            {signedUrls.length > 0 && (
-                              <div className="mt-3">
-                                <div className="text-xs mb-2 text-muted-foreground">Attached screenshots</div>
-                                <div className="flex gap-2 flex-wrap">
-                                  {signedUrls.map((u, i) => (
-                                    <a key={i} href={u} target="_blank" rel="noreferrer" className="text-xs underline">
-                                      View {i + 1}
-                                    </a>
-                                  ))}
-                                </div>
                               </div>
                             )}
                           </div>
@@ -825,13 +809,12 @@ export const AddTradeModal = ({ open, onOpenChange }: Props) => {
               </section>
             )}
 
-            {/* Footer */}
             <DialogFooter className="pt-4">
               <div className="w-full flex flex-col sm:flex-row sm:justify-end gap-2">
-                <Button type="button" variant="ghost" onClick={() => onOpenChange(false)} className="w-full sm:w-auto" disabled={isSubmitting}>
+                <Button type="button" variant="ghost" onClick={() => onOpenChange(false)} disabled={isSubmitting}>
                   Cancel
                 </Button>
-                <Button type="submit" className="min-w-[120px] w-full sm:w-auto" disabled={isSubmitting}>
+                <Button type="submit" disabled={isSubmitting}>
                   {isSubmitting ? <Loader2 className="w-4 h-4 animate-spin" /> : "Log Trade"}
                 </Button>
               </div>

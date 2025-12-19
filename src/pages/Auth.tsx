@@ -7,7 +7,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { useToast } from '@/hooks/use-toast';
-import { Chrome } from 'lucide-react';
+import { Chrome, Loader2 } from 'lucide-react';
 
 export const Auth = () => {
   const [isLogin, setIsLogin] = useState(true);
@@ -24,17 +24,41 @@ export const Auth = () => {
     }
   }, [user, navigate]);
 
+  const syncUserProfile = async (userId: string) => {
+    try {
+      const { data } = await supabase
+        .from('user_profiles')
+        .select('plan_tier')
+        .eq('id', userId)
+        .single();
+      
+      // ✅ FIX: Cast to 'any' to solve the TypeScript error
+      const profile = data as any;
+
+      if (profile?.plan_tier) {
+        console.log(`User Profile Synced: ${profile.plan_tier}`);
+      }
+    } catch (e) {
+      console.error("Profile sync warning:", e);
+    }
+  };
+
   const handleEmailAuth = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
 
     try {
       if (isLogin) {
-        const { error } = await supabase.auth.signInWithPassword({
+        const { data, error } = await supabase.auth.signInWithPassword({
           email,
           password,
         });
         if (error) throw error;
+        
+        if (data.user) {
+            await syncUserProfile(data.user.id);
+        }
+
         toast({
           title: "Welcome back!",
           description: "You've successfully signed in.",
@@ -111,7 +135,7 @@ export const Auth = () => {
             onClick={handleGoogleAuth}
             disabled={loading}
           >
-            <Chrome className="mr-2 h-4 w-4" />
+            {loading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Chrome className="mr-2 h-4 w-4" />}
             Continue with Google
           </Button>
 
@@ -150,7 +174,14 @@ export const Auth = () => {
               />
             </div>
             <Button type="submit" className="w-full" disabled={loading}>
-              {loading ? 'Loading...' : isLogin ? 'Sign In' : 'Sign Up'}
+              {loading ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  {isLogin ? 'Signing In...' : 'Signing Up...'}
+                </>
+              ) : (
+                isLogin ? 'Sign In' : 'Sign Up'
+              )}
             </Button>
           </form>
 
