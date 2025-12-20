@@ -1,28 +1,29 @@
-import { ReactNode, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { useAuth } from '@/contexts/AuthContext';
+import { Navigate, useLocation } from "react-router-dom";
+import { useAuth } from "@/contexts/AuthContext";
+import { Loader2 } from "lucide-react";
 
-interface ProtectedRouteProps {
-  children: ReactNode;
-}
-
-export const ProtectedRoute = ({ children }: ProtectedRouteProps) => {
+export const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
   const { user, loading } = useAuth();
-  const navigate = useNavigate();
-
-  useEffect(() => {
-    if (!loading && !user) {
-      navigate('/');
-    }
-  }, [user, loading, navigate]);
+  const location = useLocation();
 
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div>
+      <div className="h-screen w-full flex items-center justify-center bg-background">
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
       </div>
     );
   }
 
-  return user ? <>{children}</> : null;
+  // 1. Check if user is logged in
+  if (!user) {
+    return <Navigate to="/auth" replace state={{ from: location }} />;
+  }
+
+  // 2. 🛑 FORCE ACCEPTANCE CHECK 🛑
+  // If they are logged in BUT haven't accepted terms -> Kick them to Auth
+  if (user.user_metadata?.terms_accepted !== true) {
+    return <Navigate to="/auth" replace />;
+  }
+
+  return <>{children}</>;
 };

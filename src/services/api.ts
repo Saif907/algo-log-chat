@@ -11,10 +11,13 @@ const API_BASE_URL =
 // ------------------------------------------------------------------
 export class ApiError extends Error {
   status: number;
+  detail: string;
+
   constructor(message: string, status: number) {
     super(message);
     this.name = "ApiError";
     this.status = status;
+    this.detail = message;
   }
 }
 
@@ -25,6 +28,7 @@ export class ApiError extends Error {
 // Trades
 export type TradeDirection = "LONG" | "SHORT";
 export type TradeStatus = "OPEN" | "CLOSED";
+// ✅ MATCHES BACKEND ENUMS EXACTLY
 export type InstrumentType = "STOCK" | "CRYPTO" | "FOREX" | "FUTURES";
 
 export interface Trade {
@@ -72,6 +76,17 @@ export interface Strategy {
   updated_at?: string;
 }
 
+export interface CreateStrategyInput {
+  name: string;
+  description?: string;
+  emoji?: string;
+  color_hex?: string;
+  style?: string;
+  instrument_types?: InstrumentType[];
+  rules?: Record<string, string[]>;
+  track_missed_trades?: boolean;
+}
+
 export interface ChatMessage {
   id?: string;
   role: "user" | "assistant" | "system";
@@ -116,7 +131,6 @@ export interface NewsResult {
   related_questions: string[];
 }
 
-// ✅ FIXED: Matches Backend Response for Multiple Files
 export interface ScreenshotUploadResponse {
   files: { filename: string; url: string }[];
   uploaded_to_trade: boolean;
@@ -164,11 +178,12 @@ async function request<T>(
     let message = "API Request Failed";
     try {
       const err = await response.json();
+      // Backend throws {"detail": "Error message"}
       message = err?.detail || message;
     } catch {
       message = `HTTP ${response.status}`;
     }
-    // Throw ApiError so UI can check for 402/403
+    // Throw ApiError so UI can check for 402 (Quota) or 403 (Plan Locked)
     throw new ApiError(message, response.status);
   }
 
@@ -216,7 +231,6 @@ export const api = {
     delete: (id: string) =>
       request<void>(`/trades/${id}`, { method: "DELETE" }),
 
-    // ✅ FIXED: Handle 403 before blob
     export: async () => {
       const { data: { session } } = await supabase.auth.getSession();
       const token = session?.access_token;
@@ -238,7 +252,6 @@ export const api = {
       return response.blob();
     },
 
-    // ✅ UPDATED: Supports Multiple Files & New Endpoint
     uploadScreenshots: (files: File[], tradeId?: string) => {
       const form = new FormData();
       files.forEach((file) => {
@@ -268,16 +281,20 @@ export const api = {
   strategies: {
     getAll: () => request<Strategy[]>("/strategies/"),
     getOne: (id: string) => request<Strategy>(`/strategies/${id}`),
-    create: (data: Partial<Strategy>) =>
+    
+    // ✅ Uses Strict Input Interface
+    create: (data: CreateStrategyInput) =>
       request<Strategy>("/strategies/", {
         method: "POST",
         body: JSON.stringify(data),
       }),
+      
     update: (id: string, data: Partial<Strategy>) =>
       request<Strategy>(`/strategies/${id}`, {
         method: "PATCH",
         body: JSON.stringify(data),
       }),
+      
     delete: (id: string) =>
       request<void>(`/strategies/${id}`, { method: "DELETE" }),
   },

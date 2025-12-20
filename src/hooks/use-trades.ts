@@ -1,20 +1,23 @@
 // frontend/src/hooks/use-trades.ts
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { api, Trade } from "@/services/api";
+import { api, Trade, ApiError } from "@/services/api"; // ✅ Added ApiError
 import { toast } from "./use-toast";
+import { useModal } from "@/contexts/ModalContext"; // ✅ Added Modal Context
 
 /**
  * Trades hook
  * - Pagination-aware
  * - Search-aware
  * - Matches Sidebar prefetch keys exactly
+ * - Handles Quota/Plan errors automatically
  */
 export const useTrades = (
   page: number = 1, 
   limit: number = 20, 
-  search: string = "" // <--- Defaulting to "" matches the Sidebar key
+  search: string = "" 
 ) => {
   const queryClient = useQueryClient();
+  const { openUpgradeModal } = useModal(); // ✅ Get the modal trigger
 
   // -------------------------
   // Fetch Trades (Paginated)
@@ -40,8 +43,13 @@ export const useTrades = (
       queryClient.invalidateQueries({ queryKey: ["trades"], exact: false });
       toast({ title: "Trade Logged", description: "Your trade has been recorded successfully." });
     },
-    onError: (error: Error) => {
-      toast({ title: "Error", description: error.message, variant: "destructive" });
+    onError: (error: any) => {
+      // ✅ Handle Quota Limit (402)
+      if (error instanceof ApiError && error.status === 402) {
+        openUpgradeModal(error.message || "Trade limit reached. Upgrade to journal more.");
+      } else {
+        toast({ title: "Error", description: error.message, variant: "destructive" });
+      }
     },
   });
 
@@ -84,8 +92,13 @@ export const useTrades = (
       queryClient.invalidateQueries({ queryKey: ["trades"], exact: false });
       toast({ title: "Screenshots Uploaded", description: "Images successfully attached." });
     },
-    onError: (error: Error) => {
-      toast({ title: "Upload Failed", description: error.message, variant: "destructive" });
+    onError: (error: any) => {
+      // ✅ Handle Feature Lock (403) or Quota (402)
+      if (error instanceof ApiError && (error.status === 403 || error.status === 402)) {
+        openUpgradeModal(error.message || "Screenshots are a PRO feature. Upgrade to unlock.");
+      } else {
+        toast({ title: "Upload Failed", description: error.message, variant: "destructive" });
+      }
     },
   });
 

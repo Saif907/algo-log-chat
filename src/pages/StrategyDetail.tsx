@@ -1,86 +1,104 @@
-import { useEffect, useState } from "react";
+// frontend/src/pages/StrategyDetail.tsx
+import { useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { ArrowLeft, Edit, Trash2, TrendingUp, TrendingDown } from "lucide-react";
+import { ArrowLeft, Edit, Trash2, TrendingUp, TrendingDown, Target } from "lucide-react";
 import { TradeCard } from "@/components/trades/TradeCard";
 import { supabase } from "@/integrations/supabase/client";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useToast } from "@/hooks/use-toast";
+import { api } from "@/services/api";
+
+// ✅ Import the Edit Modal
+import { EditStrategyModal } from "@/components/strategies/EditStrategyModal";
 
 export const StrategyDetail = () => {
   const navigate = useNavigate();
-  const { id } = useParams();
+  const { id } = useParams<{ id: string }>();
   const { toast } = useToast();
+  const queryClient = useQueryClient();
   
-  const [strategy, setStrategy] = useState<any>(null);
-  const [trades, setTrades] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [isEditOpen, setIsEditOpen] = useState(false);
 
-  // Fetch Strategy and Related Trades
-  useEffect(() => {
-    const fetchData = async () => {
-      if (!id) return;
+  // --- 1. Fetch Strategy Data (React Query) ---
+  const { data: strategy, isLoading: isStrategyLoading, isError } = useQuery({
+    queryKey: ["strategy", id],
+    queryFn: () => api.strategies.getOne(id!),
+    enabled: !!id,
+  });
 
-      // 1. Get Strategy Details
-      const { data: stratData, error: stratError } = await supabase
-        .from('strategies')
-        .select('*')
-        .eq('id', id)
-        .single();
-
-      if (stratError) {
-        toast({ title: "Error", description: "Strategy not found", variant: "destructive" });
-        navigate('/strategies');
-        return;
-      }
-
-      // 2. Get Trades for this Strategy
-      const { data: tradeData, error: tradeError } = await supabase
+  // --- 2. Fetch Related Trades (React Query) ---
+  const { data: trades = [], isLoading: isTradesLoading } = useQuery({
+    queryKey: ["strategy-trades", id],
+    queryFn: async () => {
+      const { data, error } = await supabase
         .from('trades')
         .select('*')
         .eq('strategy_id', id)
         .order('entry_time', { ascending: false });
+      
+      if (error) throw error;
+      return data;
+    },
+    enabled: !!id,
+  });
 
-      setStrategy(stratData);
-      setTrades(tradeData || []);
-      setLoading(false);
-    };
+  // --- Delete Handler ---
+  const handleDelete = async () => {
+    if (!id) return;
+    if (!confirm("Are you sure you want to delete this strategy? All linked trades will be unlinked.")) return;
+    
+    try {
+      await api.strategies.delete(id);
+      queryClient.invalidateQueries({ queryKey: ["strategies"] });
+      toast({ title: "Strategy Deleted", description: "Strategy removed successfully." });
+      navigate("/strategies");
+    } catch (error: any) {
+      toast({ title: "Error", description: "Failed to delete strategy.", variant: "destructive" });
+    }
+  };
 
-    fetchData();
-  }, [id, navigate, toast]);
+  // --- Loading States ---
+  if (isStrategyLoading || isTradesLoading) {
+    return <div className="p-8"><Skeleton className="h-[400px] w-full rounded-xl" /></div>;
+  }
 
-  if (loading) return <div className="p-8"><Skeleton className="h-[600px]" /></div>;
-  if (!strategy) return null;
+  if (isError || !strategy) {
+    return (
+      <div className="flex flex-col items-center justify-center min-h-[50vh] space-y-4">
+        <h2 className="text-xl font-semibold">Strategy not found</h2>
+        <Button onClick={() => navigate('/strategies')}>Return to Strategies</Button>
+      </div>
+    );
+  }
 
-  // Calculate Metrics
+  // --- Metrics Calculation ---
   const totalTrades = trades.length;
   const winners = trades.filter(t => (t.pnl || 0) > 0);
   const losers = trades.filter(t => (t.pnl || 0) <= 0);
   
-  // Calculate Gross Profit and Gross Loss directly
   const grossProfit = winners.reduce((sum, t) => sum + (t.pnl || 0), 0);
   const grossLoss = Math.abs(losers.reduce((sum, t) => sum + (t.pnl || 0), 0));
   
   const netPL = grossProfit - grossLoss;
   const winRate = totalTrades > 0 ? (winners.length / totalTrades) * 100 : 0;
   
-  // Standard Profit Factor Calculation: Gross Profit / Gross Loss
-  const profitFactor = grossLoss > 0 
-    ? grossProfit / grossLoss 
-    : grossProfit > 0 ? 999 : 0;
+  // Profit Factor Logic (Matches Backend)
+  let profitFactor = 0;
+  if (totalTrades > 0) {
+      if (grossLoss < 0.01) profitFactor = 100; // No Loss
+      else profitFactor = grossProfit / grossLoss;
+  }
 
-  // Averages for display
   const avgWin = winners.length > 0 ? grossProfit / winners.length : 0;
-  // Use absolute value for Avg Loser display to match standard conventions (e.g. "Avg Loser: $50")
   const avgLoss = losers.length > 0 ? grossLoss / losers.length : 0;
-
-  // Expectancy = (Win % * Avg Win) - (Loss % * Avg Loss)
   const expectancy = ((winRate / 100) * avgWin) - ((1 - (winRate / 100)) * avgLoss);
 
-  // Helper for Trade Card Mapping
+  // Helper for Trade Card
   const mapTradeToCard = (trade: any) => ({
     id: trade.id,
     symbol: trade.symbol,
@@ -100,12 +118,12 @@ export const StrategyDetail = () => {
     tags: trade.tags || [],
   });
 
-  // Parse Rules (JSONB)
   const rules = (strategy.rules as any) || { market: [], entry: [], exit: [], risk: [] };
 
   return (
     <div className="min-h-screen pb-24 px-4 md:px-6 lg:px-8">
-      <div className="max-w-7xl mx-auto py-6 space-y-6">
+      <div className="max-w-7xl mx-auto py-6 space-y-6 animate-in fade-in duration-300">
+        
         {/* Header */}
         <div className="flex items-start justify-between">
           <div className="flex items-start gap-4">
@@ -114,27 +132,40 @@ export const StrategyDetail = () => {
             </Button>
             <div>
               <div className="flex items-center gap-3 mb-2">
-                <span className="text-4xl">{strategy.emoji}</span>
-                <h1 className="text-3xl font-bold">{strategy.name}</h1>
+                <div className="flex items-center justify-center w-10 h-10 rounded-full bg-muted/50 text-xl shadow-sm border border-border/50">
+                    {strategy.emoji || "📈"}
+                </div>
+                <h1 className="text-3xl font-bold tracking-tight">{strategy.name}</h1>
               </div>
-              <p className="text-muted-foreground max-w-2xl">{strategy.description}</p>
+              <p className="text-muted-foreground max-w-2xl text-sm leading-relaxed">{strategy.description || "No description provided."}</p>
               <div className="flex flex-wrap gap-2 mt-3">
-                <Badge variant="secondary">{strategy.style || "General"}</Badge>
+                <Badge variant="secondary" className="px-2.5 py-0.5">{strategy.style || "General"}</Badge>
                 {strategy.instrument_types?.map((inst: string) => (
-                  <Badge key={inst} variant="outline">{inst}</Badge>
+                  <Badge key={inst} variant="outline" className="text-xs">{inst}</Badge>
                 ))}
               </div>
             </div>
           </div>
+          
           <div className="flex gap-2">
-            <Button variant="outline" size="icon">
+            {/* ✅ FIXED: Edit Button now opens modal */}
+            <Button variant="outline" size="icon" onClick={() => setIsEditOpen(true)}>
               <Edit className="h-4 w-4" />
             </Button>
-            <Button variant="outline" size="icon" className="text-destructive">
+            
+            {/* ✅ FIXED: Delete Button now works */}
+            <Button variant="outline" size="icon" className="text-destructive hover:bg-destructive/10" onClick={handleDelete}>
               <Trash2 className="h-4 w-4" />
             </Button>
           </div>
         </div>
+
+        {/* ✅ Edit Modal */}
+        <EditStrategyModal 
+            open={isEditOpen} 
+            onOpenChange={setIsEditOpen} 
+            strategyId={id} 
+        />
 
         {/* Performance Overview */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
@@ -152,7 +183,9 @@ export const StrategyDetail = () => {
               <CardTitle className="text-sm font-medium text-muted-foreground">Win Rate</CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="text-3xl font-bold text-success">{winRate.toFixed(1)}%</div>
+              <div className={`text-3xl font-bold ${winRate >= 50 ? "text-success" : "text-muted-foreground"}`}>
+                {winRate.toFixed(1)}%
+              </div>
             </CardContent>
           </Card>
 
@@ -186,7 +219,9 @@ export const StrategyDetail = () => {
             <div className="grid grid-cols-2 md:grid-cols-3 gap-6">
               <div>
                 <p className="text-sm text-muted-foreground mb-1">Expectancy</p>
-                <p className="text-xl font-semibold">${expectancy.toFixed(2)}</p>
+                <p className={`text-xl font-semibold ${expectancy > 0 ? "text-success" : ""}`}>
+                    ${expectancy.toFixed(2)}
+                </p>
               </div>
               <div>
                 <p className="text-sm text-muted-foreground mb-1">Avg Winner</p>
@@ -216,24 +251,25 @@ export const StrategyDetail = () => {
 
           <TabsContent value="rules" className="space-y-4 mt-6">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {/* Dynamically map rule categories */}
               {Object.entries(rules).map(([category, ruleList]: [string, any]) => (
                 <Card key={category}>
-                  <CardHeader>
-                    <CardTitle className="text-lg capitalize">{category} Rules</CardTitle>
+                  <CardHeader className="pb-2">
+                    <CardTitle className="text-lg capitalize flex items-center gap-2">
+                        {category} Rules
+                    </CardTitle>
                   </CardHeader>
                   <CardContent>
                     {Array.isArray(ruleList) && ruleList.length > 0 ? (
-                      <ul className="space-y-2">
+                      <ul className="space-y-3">
                         {ruleList.map((rule: string, index: number) => (
-                          <li key={index} className="flex items-start gap-2">
-                            <span className="text-primary mt-1">•</span>
-                            <span>{rule}</span>
+                          <li key={index} className="flex items-start gap-2.5">
+                            <div className="min-w-1.5 h-1.5 rounded-full bg-primary mt-2" />
+                            <span className="text-sm leading-relaxed">{rule}</span>
                           </li>
                         ))}
                       </ul>
                     ) : (
-                      <p className="text-muted-foreground text-sm">No rules defined.</p>
+                      <p className="text-muted-foreground text-sm italic">No {category} rules defined.</p>
                     )}
                   </CardContent>
                 </Card>
@@ -253,8 +289,12 @@ export const StrategyDetail = () => {
                   onClick={() => navigate(`/trades/${trade.id}`)}
                 />
               )) : (
-                <div className="text-center py-10 text-muted-foreground">
-                  No trades logged with this strategy yet.
+                <div className="flex flex-col items-center justify-center py-16 text-muted-foreground border-2 border-dashed border-muted rounded-xl bg-muted/5">
+                  <Target className="w-10 h-10 mb-3 opacity-20" />
+                  <p>No trades logged with this strategy yet.</p>
+                  <Button variant="link" onClick={() => navigate('/trades')} className="mt-2">
+                    Go to Trades to log one
+                  </Button>
                 </div>
               )}
             </div>
@@ -266,9 +306,15 @@ export const StrategyDetail = () => {
                  <CardTitle>AI Analysis</CardTitle>
               </CardHeader>
               <CardContent>
-                <p className="text-muted-foreground">
-                   AI insights will be generated here once you have logged at least 5 trades with this strategy.
-                </p>
+                <div className="flex flex-col items-center justify-center py-10 text-center">
+                    <div className="w-12 h-12 rounded-full bg-primary/10 flex items-center justify-center mb-4">
+                        <span className="text-2xl">✨</span>
+                    </div>
+                    <h3 className="font-semibold text-lg mb-2">Coming Soon</h3>
+                    <p className="text-muted-foreground max-w-md">
+                        AI insights will automatically analyze your execution patterns once you have logged at least 5 trades with this strategy.
+                    </p>
+                </div>
               </CardContent>
             </Card>
           </TabsContent>

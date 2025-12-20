@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
-import { useQuery, useQueryClient } from "@tanstack/react-query"; // ✅ Import React Query hooks
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   Edit,
   Trash2,
@@ -17,7 +17,7 @@ import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useToast } from "@/hooks/use-toast";
-import { api, Trade } from "@/services/api"; // Ensure Trade type is imported
+import { api, Trade } from "@/services/api";
 import { EditTradeModal } from "@/components/trades/EditTradeModal";
 
 import { useAuth } from "@/contexts/AuthContext";
@@ -31,38 +31,35 @@ export const TradeDetail = () => {
 
   const { plan } = useAuth();
   const { openUpgradeModal } = useModal();
-  const isPro = plan === "PRO" || plan === "FOUNDER";
+  // Check strict plan matching
+  const isPro = plan?.toUpperCase() === "PRO" || plan?.toUpperCase() === "FOUNDER";
 
   const [isEditOpen, setIsEditOpen] = useState<boolean>(false);
   const [selectedImage, setSelectedImage] = useState<string | null>(null);
 
   // --- 1. INSTANT LOAD: Fetch Trade with Cache Fallback ---
   const { data: trade, isLoading: isTradeLoading, isError } = useQuery({
-    queryKey: ["trade", id],
+    queryKey: ["trade", id], // Unique key for Detail View
     queryFn: () => api.trades.getOne(id!),
     enabled: !!id,
     initialData: () => {
-      // ⚡ MAGIC: Try to find this trade in the 'trades' list cache first
-      // Note: This matches the default page 1 key. If user came from page 2, 
-      // we might miss it, but that's fine—it just falls back to fetching.
+      // ⚡ OPTIMIZATION: Check if we already have this trade in the list cache
       const allTrades = queryClient.getQueryData<any>(["trades", 1, 20, ""])?.data; 
       return allTrades?.find((t: Trade) => t.id === id);
     },
     initialDataUpdatedAt: () => {
-        // Mark initial data as potentially stale so we fetch fresh data (notes/screenshots) in background
-        // but SHOW the cached data instantly.
         return queryClient.getQueryState(["trades", 1, 20, ""])?.dataUpdatedAt;
     }
   });
 
-  // --- 2. BACKGROUND FETCH: Screenshots & Related ---
-  // These run in parallel but don't block the main UI
-  const { data: screenshots, isLoading: isScreenshotsLoading } = useQuery({
-    queryKey: ["trade-screenshots", id],
+  // --- 2. BACKGROUND FETCH: Screenshots ---
+  const { data: screenshots, isLoading: isScreenshotsLoading, refetch: refetchScreenshots } = useQuery({
+    queryKey: ["trade-screenshots", id], // Unique key for Screenshots
     queryFn: () => api.trades.getScreenshots(id!).then(res => res.files),
     enabled: !!id,
   });
 
+  // --- 3. BACKGROUND FETCH: Related Trades ---
   const { data: relatedTrades, isLoading: isRelatedLoading } = useQuery({
     queryKey: ["related-trades", trade?.symbol],
     queryFn: async () => {
@@ -70,10 +67,10 @@ export const TradeDetail = () => {
         const res = await api.trades.getAll(1, 10, trade.symbol);
         return (res.data || []).filter((t: any) => t.id !== id).slice(0, 3);
     },
-    enabled: !!trade?.symbol, // Only fetch once we know the symbol
+    enabled: !!trade?.symbol,
   });
 
-  /* Helpers */
+  // --- Helpers ---
   const calculateHoldingTime = (start: string, end?: string | null) => {
     if (!end) return "Open";
     const diff = new Date(end).getTime() - new Date(start).getTime();
@@ -97,6 +94,8 @@ export const TradeDetail = () => {
     if (!confirm("Are you sure you want to delete this trade?")) return;
     try {
       await api.trades.delete(id);
+      // Invalidate list so it disappears from the main table
+      queryClient.invalidateQueries({ queryKey: ["trades"] });
       toast({ title: "Deleted", description: "Trade deleted successfully" });
       navigate("/trades");
     } catch (err: any) {
@@ -104,19 +103,27 @@ export const TradeDetail = () => {
     }
   };
 
-  // Handle Errors/Redirect
+  const handleModalClose = (open: boolean) => {
+    setIsEditOpen(open);
+    if (!open) {
+        // ✅ CRITICAL FIX: When modal closes, force refresh the data.
+        // This ensures screenshots uploaded in the modal appear immediately.
+        queryClient.invalidateQueries({ queryKey: ["trade", id] });
+        queryClient.invalidateQueries({ queryKey: ["trade-screenshots", id] });
+        refetchScreenshots();
+    }
+  };
+
+  // --- Render Guards ---
   if (isError) {
       navigate("/trades");
       return null;
   }
 
-  // Show Skeleton ONLY if we have absolutely no data (fresh load from direct URL)
   if (isTradeLoading && !trade) return <div className="p-8"><Skeleton className="h-[600px] w-full" /></div>;
-  
-  // If we have initialData, 'trade' is populated instantly!
   if (!trade) return null;
 
-  /* Derived values */
+  // --- Derived Values ---
   const riskAmount = calculateRisk(trade.entry_price, trade.stop_loss, trade.quantity);
   const rMultiple = calculateRMultiple(trade.pnl || 0, riskAmount);
   const holdingTime = calculateHoldingTime(trade.entry_time, trade.exit_time);
@@ -182,11 +189,7 @@ export const TradeDetail = () => {
 
       <EditTradeModal
         open={isEditOpen}
-        onOpenChange={(open) => {
-          setIsEditOpen(open);
-          // React Query handles auto-refetching on mutation success, 
-          // so we don't need manual reload logic here!
-        }}
+        onOpenChange={handleModalClose}
         trade={trade}
       />
 
@@ -214,7 +217,6 @@ export const TradeDetail = () => {
         <Card className="p-4 sm:p-6 flex flex-col">
           <h3 className="text-xs sm:text-sm font-semibold mb-3 sm:mb-4">TRADE NOTES</h3>
           <div className="bg-muted/30 p-4 rounded-lg flex-1 text-sm whitespace-pre-wrap leading-relaxed min-h-[200px]">
-            {/* Note: 'encrypted_notes' is actually decrypted by backend now, field name just legacy */}
             {trade.encrypted_notes || <span className="text-muted-foreground italic">No notes added.</span>}
           </div>
         </Card>
@@ -256,6 +258,7 @@ export const TradeDetail = () => {
                     src={s.url}
                     alt={`Screenshot ${index + 1}`}
                     className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
+                    loading="lazy"
                   />
                   <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
                     <Maximize2 className="text-white h-6 w-6 drop-shadow-md" />
