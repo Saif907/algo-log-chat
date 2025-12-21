@@ -4,11 +4,13 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { 
-  TrendingUp, BarChart3, Brain, Shield, Calendar, 
-  Layers, BookOpen, MessageSquare, ChevronRight, 
-  Play, Check, Star, Zap, Lock, LineChart,
-  Target, Award, ArrowRight, Menu, X
+  BarChart3, Brain, Shield, Calendar, 
+  Layers, BookOpen, ChevronRight, 
+  Play, Check, Zap, Lock,
+  ArrowRight, Menu, X, LayoutDashboard
 } from "lucide-react";
+import { SEO } from "@/components/SEO";
+import { useAuth } from "@/contexts/AuthContext"; // ✅ Import Auth Context
 
 const features = [
   {
@@ -43,27 +45,6 @@ const features = [
   }
 ];
 
-const testimonials = [
-  {
-    name: "Alex Thompson",
-    role: "Day Trader",
-    content: "TradeOmen transformed my trading. The AI insights helped me identify that I was overtrading on Mondays. My win rate improved by 23%.",
-    avatar: "AT"
-  },
-  {
-    name: "Sarah Chen",
-    role: "Swing Trader",
-    content: "Finally a journal that understands traders. The playbook feature alone saved me thousands by showing which setups to avoid.",
-    avatar: "SC"
-  },
-  {
-    name: "Michael Roberts",
-    role: "Options Trader",
-    content: "The psychology tracking is game-changing. I can now see exactly how emotions affect my P&L. Worth every penny.",
-    avatar: "MR"
-  }
-];
-
 const pricingPlans = [
   {
     name: "Free",
@@ -94,19 +75,19 @@ const pricingPlans = [
   }
 ];
 
-const stats = [
-  { value: "50K+", label: "Active Traders" },
-  { value: "$2.3B", label: "Trades Analyzed" },
-  { value: "34%", label: "Avg. Improvement" },
-  { value: "4.9/5", label: "User Rating" }
-];
-
 export const Landing = () => {
   const navigate = useNavigate();
+  const { user } = useAuth(); // ✅ Get User Status
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   return (
     <div className="min-h-screen bg-background">
+      <SEO 
+        title="TradeOmen - #1 AI Trading Journal & Analytics Platform"
+        description="Turn your trading data into profitable insights. AI-powered analytics, automated journaling, and playbook tracking for serious traders. Start for free."
+        type="website"
+      />
+
       {/* Navigation */}
       <nav className="fixed top-0 left-0 right-0 z-50 bg-background/80 backdrop-blur-lg border-b border-border">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -123,16 +104,25 @@ export const Landing = () => {
               <a href="#features" className="text-sm text-muted-foreground hover:text-foreground transition-colors">Features</a>
               <a href="#demo" className="text-sm text-muted-foreground hover:text-foreground transition-colors">Demo</a>
               <a href="#pricing" className="text-sm text-muted-foreground hover:text-foreground transition-colors">Pricing</a>
-              <a href="#testimonials" className="text-sm text-muted-foreground hover:text-foreground transition-colors">Reviews</a>
             </div>
 
             <div className="hidden md:flex items-center gap-3">
-              <Button variant="ghost" onClick={() => navigate("/auth")}>
-                Log In
-              </Button>
-              <Button onClick={() => navigate("/auth")} className="bg-primary hover:bg-primary/90">
-                Get Started Free
-              </Button>
+              {/* ✅ Conditional Rendering based on Auth Status */}
+              {user ? (
+                <Button onClick={() => navigate("/dashboard")} className="bg-primary hover:bg-primary/90 gap-2">
+                  <LayoutDashboard className="h-4 w-4" />
+                  Go to Dashboard
+                </Button>
+              ) : (
+                <>
+                  <Button variant="ghost" onClick={() => navigate("/auth")}>
+                    Log In
+                  </Button>
+                  <Button onClick={() => navigate("/auth")} className="bg-primary hover:bg-primary/90">
+                    Get Started Free
+                  </Button>
+                </>
+              )}
             </div>
 
             {/* Mobile menu button */}
@@ -154,10 +144,19 @@ export const Landing = () => {
               <a href="#features" className="block text-sm text-muted-foreground hover:text-foreground">Features</a>
               <a href="#demo" className="block text-sm text-muted-foreground hover:text-foreground">Demo</a>
               <a href="#pricing" className="block text-sm text-muted-foreground hover:text-foreground">Pricing</a>
-              <a href="#testimonials" className="block text-sm text-muted-foreground hover:text-foreground">Reviews</a>
               <div className="pt-3 border-t border-border space-y-2">
-                <Button variant="outline" className="w-full" onClick={() => navigate("/auth")}>Log In</Button>
-                <Button className="w-full" onClick={() => navigate("/auth")}>Get Started Free</Button>
+                {/* ✅ Conditional Mobile Rendering */}
+                {user ? (
+                  <Button className="w-full gap-2" onClick={() => navigate("/dashboard")}>
+                    <LayoutDashboard className="h-4 w-4" />
+                    Go to Dashboard
+                  </Button>
+                ) : (
+                  <>
+                    <Button variant="outline" className="w-full" onClick={() => navigate("/auth")}>Log In</Button>
+                    <Button className="w-full" onClick={() => navigate("/auth")}>Get Started Free</Button>
+                  </>
+                )}
               </div>
             </div>
           </div>
@@ -180,8 +179,8 @@ export const Landing = () => {
               The smart trading journal that analyzes your patterns, identifies your mistakes, and helps you become consistently profitable.
             </p>
             <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
-              <Button size="lg" onClick={() => navigate("/auth")} className="w-full sm:w-auto px-8">
-                Start Free Trial
+              <Button size="lg" onClick={() => navigate(user ? "/dashboard" : "/auth")} className="w-full sm:w-auto px-8">
+                {user ? "Go to Dashboard" : "Start Free Trial"}
                 <ArrowRight className="ml-2 h-4 w-4" />
               </Button>
               <Button size="lg" variant="outline" className="w-full sm:w-auto px-8">
@@ -193,16 +192,6 @@ export const Landing = () => {
               No credit card required • 14-day free trial • Cancel anytime
             </p>
           </div>
-
-          {/* Stats */}
-          <div className="mt-20 grid grid-cols-2 md:grid-cols-4 gap-8">
-            {stats.map((stat, i) => (
-              <div key={i} className="text-center">
-                <div className="text-3xl sm:text-4xl font-bold text-primary mb-1">{stat.value}</div>
-                <div className="text-sm text-muted-foreground">{stat.label}</div>
-              </div>
-            ))}
-          </div>
         </div>
       </section>
 
@@ -212,7 +201,7 @@ export const Landing = () => {
           <div className="text-center mb-12">
             <h2 className="text-3xl sm:text-4xl font-bold mb-4">See TradeOmen in Action</h2>
             <p className="text-muted-foreground max-w-2xl mx-auto">
-              Watch how traders use our platform to improve their performance
+              Watch how our platform helps you improve your performance.
             </p>
           </div>
           <Card className="overflow-hidden border-border/50 bg-card/50 backdrop-blur">
@@ -314,43 +303,8 @@ export const Landing = () => {
         </div>
       </section>
 
-      {/* Testimonials Section */}
-      <section id="testimonials" className="py-20 px-4">
-        <div className="max-w-7xl mx-auto">
-          <div className="text-center mb-16">
-            <Badge variant="outline" className="mb-4">Testimonials</Badge>
-            <h2 className="text-3xl sm:text-4xl font-bold mb-4">Loved by Traders Worldwide</h2>
-            <p className="text-muted-foreground">Join thousands of traders who improved their performance with TradeOmen</p>
-          </div>
-
-          <div className="grid md:grid-cols-3 gap-6">
-            {testimonials.map((testimonial, i) => (
-              <Card key={i} className="bg-card/50 border-border/50">
-                <CardContent className="p-6">
-                  <div className="flex items-center gap-1 mb-4">
-                    {[...Array(5)].map((_, i) => (
-                      <Star key={i} className="h-4 w-4 fill-yellow-500 text-yellow-500" />
-                    ))}
-                  </div>
-                  <p className="text-sm mb-6">"{testimonial.content}"</p>
-                  <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center text-sm font-semibold">
-                      {testimonial.avatar}
-                    </div>
-                    <div>
-                      <div className="font-medium text-sm">{testimonial.name}</div>
-                      <div className="text-xs text-muted-foreground">{testimonial.role}</div>
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
-            ))}
-          </div>
-        </div>
-      </section>
-
       {/* Pricing Section */}
-      <section id="pricing" className="py-20 px-4 bg-muted/30">
+      <section id="pricing" className="py-20 px-4">
         <div className="max-w-7xl mx-auto">
           <div className="text-center mb-16">
             <Badge variant="outline" className="mb-4">Pricing</Badge>
@@ -396,7 +350,7 @@ export const Landing = () => {
       </section>
 
       {/* CTA Section */}
-      <section className="py-20 px-4">
+      <section className="py-20 px-4 bg-muted/30">
         <div className="max-w-4xl mx-auto text-center">
           <h2 className="text-3xl sm:text-4xl font-bold mb-6">
             Ready to Transform Your Trading?
@@ -469,7 +423,5 @@ export const Landing = () => {
     </div>
   );
 };
-
-
 
 export default Landing;

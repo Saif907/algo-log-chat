@@ -1,7 +1,9 @@
+// frontend/src/components/analytics/TradeAnalysis.tsx
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { ScatterChart, Scatter, BarChart, Bar, XAxis, YAxis, CartesianGrid, ResponsiveContainer, Cell, Tooltip, PieChart, Pie } from "recharts";
 import { useMemo } from "react";
+import { useCurrency } from "@/contexts/CurrencyContext"; // ✅ Import Context
 
 interface Props {
   rawTrades: any[];
@@ -12,14 +14,16 @@ interface Props {
 }
 
 export const TradeAnalysis = ({ rawTrades, mistakeData, emotionData, tagData, rMultipleData }: Props) => {
+  const { format, convert, currency } = useCurrency(); // ✅ Use Hook
   
+  // ✅ Convert Scatter Data
   const scatterData = useMemo(() => {
     return rawTrades.map(t => ({
-      x: t.quantity * t.entry_price, 
-      y: t.pnl || 0,
+      x: convert(t.quantity * t.entry_price), // Size in Selected Currency
+      y: convert(t.pnl || 0), // PnL in Selected Currency
       size: 100 
     }));
-  }, [rawTrades]);
+  }, [rawTrades, convert]);
 
   const COLORS = ["hsl(var(--primary))", "hsl(var(--success))", "hsl(var(--destructive))", "hsl(180, 70%, 50%)", "hsl(var(--muted-foreground))"];
 
@@ -31,7 +35,7 @@ export const TradeAnalysis = ({ rawTrades, mistakeData, emotionData, tagData, rM
 
   return (
     <div className="space-y-4 sm:space-y-6">
-      {/* R-Multiple Distribution */}
+      {/* R-Multiple Distribution (No Currency Change Needed - It's a Ratio) */}
       <Card className="p-4 sm:p-6">
         <h3 className="text-xs sm:text-sm font-semibold mb-4">R-MULTIPLE DISTRIBUTION</h3>
         <ResponsiveContainer width="100%" height={240}>
@@ -40,7 +44,6 @@ export const TradeAnalysis = ({ rawTrades, mistakeData, emotionData, tagData, rM
             <XAxis dataKey="range" stroke="hsl(var(--muted-foreground))" fontSize={10} />
             <YAxis stroke="hsl(var(--muted-foreground))" fontSize={10} />
             
-            {/* ✅ FIXED: Tooltip Colors */}
             <Tooltip 
               cursor={{fill: 'transparent'}} 
               contentStyle={tooltipStyle}
@@ -59,18 +62,18 @@ export const TradeAnalysis = ({ rawTrades, mistakeData, emotionData, tagData, rM
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 sm:gap-4">
         {/* Scatter Plot */}
         <Card className="p-4 sm:p-6">
-          <h3 className="text-xs sm:text-sm font-semibold mb-4">SIZE VS P&L</h3>
+          <h3 className="text-xs sm:text-sm font-semibold mb-4">SIZE ({currency}) VS P&L ({currency})</h3>
           <ResponsiveContainer width="100%" height={240}>
             <ScatterChart>
               <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
-              <XAxis dataKey="x" name="Size" unit="$" stroke="hsl(var(--muted-foreground))" fontSize={10} />
-              <YAxis dataKey="y" name="P&L" unit="$" stroke="hsl(var(--muted-foreground))" fontSize={10} />
+              <XAxis dataKey="x" name="Size" unit={currency} stroke="hsl(var(--muted-foreground))" fontSize={10} />
+              <YAxis dataKey="y" name="P&L" unit={currency} stroke="hsl(var(--muted-foreground))" fontSize={10} />
               
-              {/* ✅ FIXED: Tooltip Colors */}
               <Tooltip 
                 cursor={{strokeDasharray: '3 3'}} 
                 contentStyle={tooltipStyle}
                 itemStyle={{ color: 'hsl(var(--popover-foreground))' }}
+                formatter={(val: number) => format(val)}
               />
               
               <Scatter data={scatterData} fill="hsl(var(--primary))">
@@ -92,7 +95,6 @@ export const TradeAnalysis = ({ rawTrades, mistakeData, emotionData, tagData, rM
                   <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
                 ))}
               </Pie>
-              {/* ✅ FIXED: Tooltip Colors */}
               <Tooltip 
                 contentStyle={tooltipStyle}
                 itemStyle={{ color: 'hsl(var(--popover-foreground))' }}
@@ -123,7 +125,10 @@ export const TradeAnalysis = ({ rawTrades, mistakeData, emotionData, tagData, rM
                 <span className="text-sm font-medium">{mistake.name}</span>
                 <Badge variant="secondary" className="text-[10px]">{mistake.count} trades</Badge>
               </div>
-              <span className="text-sm font-semibold text-destructive">${Math.abs(mistake.pnl).toLocaleString()}</span>
+              <span className="text-sm font-semibold text-destructive">
+                 {/* ✅ Use format() */}
+                 {format(Math.abs(mistake.pnl))}
+              </span>
             </div>
           )) : <p className="text-sm text-muted-foreground">No mistakes recorded.</p>}
         </div>
@@ -149,7 +154,8 @@ export const TradeAnalysis = ({ rawTrades, mistakeData, emotionData, tagData, rM
                   <td className="text-sm p-2 text-center">{row.trades}</td>
                   <td className="text-sm p-2 text-center"><span className={row.winRate >= 50 ? "text-success" : "text-destructive"}>{row.winRate}%</span></td>
                   <td className={`text-sm p-2 text-right font-semibold ${row.pnl >= 0 ? "text-success" : "text-destructive"}`}>
-                    {row.pnl >= 0 ? "+" : ""}${row.pnl.toLocaleString()}
+                     {/* ✅ Use format() */}
+                    {row.pnl >= 0 ? "+" : ""}{format(Math.abs(row.pnl))}
                   </td>
                 </tr>
               )) : <tr><td colSpan={4} className="text-center p-4 text-muted-foreground">No emotions logged.</td></tr>}

@@ -1,3 +1,4 @@
+// frontend/src/pages/Strategies.tsx
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { 
@@ -6,7 +7,6 @@ import {
   Trash2, 
   Edit, 
   Target,
-  Lock 
 } from "lucide-react";
 
 // UI Components
@@ -29,10 +29,12 @@ import { EditStrategyModal } from "@/components/strategies/EditStrategyModal";
 import { useStrategies, StrategyOverview } from "@/hooks/use-strategies";
 import { useAuth } from "@/contexts/AuthContext"; 
 import { useModal } from "@/contexts/ModalContext"; 
+import { useCurrency } from "@/contexts/CurrencyContext"; // ✅ Import Context
 
 export const Strategies = () => {
   const navigate = useNavigate();
   const { strategies, isLoading, deleteStrategy } = useStrategies();
+  const { format, currency } = useCurrency(); // ✅ Use Hook
   
   // 1. Get User Plan Info
   const { plan } = useAuth();
@@ -184,9 +186,12 @@ export const Strategies = () => {
                         </div>
                       </div>
                       <div className="flex-1 space-y-1">
-                        <p className="text-xs text-muted-foreground font-medium uppercase tracking-wider">Net P&L</p>
+                        <p className="text-xs text-muted-foreground font-medium uppercase tracking-wider">
+                            Net P&L ({currency})
+                        </p>
                         <div className={`text-2xl font-bold flex items-center gap-1 ${stats.netPL >= 0 ? 'text-green-500' : 'text-red-500'}`}>
-                           {stats.netPL >= 0 ? '+' : ''}${Math.abs(stats.netPL).toLocaleString()}
+                           {/* ✅ Use Format */}
+                           {stats.netPL >= 0 ? '+' : ''}{format(Math.abs(stats.netPL))}
                         </div>
                         <p className="text-xs text-muted-foreground truncate">{strategy.style || "General"}</p>
                       </div>
@@ -196,22 +201,30 @@ export const Strategies = () => {
                     <div className="grid grid-cols-2 gap-y-4 gap-x-2 border-t border-border pt-4">
                       <div>
                         <p className="text-[10px] text-muted-foreground uppercase font-semibold">Profit Factor</p>
-                        {/* ✅ FIX: Removed the ternary check. Now shows 100.00 for no-loss strategies */}
                         <p className="text-sm font-medium">
                           {stats.profitFactor.toFixed(2)}
                         </p>
                       </div>
                       <div>
                         <p className="text-[10px] text-muted-foreground uppercase font-semibold">Expectancy</p>
-                        <p className={`text-sm font-medium ${expectancy > 0 ? 'text-green-500' : 'text-red-500'}`}>${expectancy.toFixed(2)}</p>
+                        <p className={`text-sm font-medium ${expectancy > 0 ? 'text-green-500' : 'text-red-500'}`}>
+                           {/* ✅ Use Format */}
+                           {format(expectancy)}
+                        </p>
                       </div>
                       <div>
                         <p className="text-[10px] text-muted-foreground uppercase font-semibold">Avg Win</p>
-                        <p className="text-sm font-medium text-green-500">+${avgWin.toFixed(2)}</p>
+                        <p className="text-sm font-medium text-green-500">
+                           {/* ✅ Use Format */}
+                           +{format(avgWin)}
+                        </p>
                       </div>
                       <div>
                         <p className="text-[10px] text-muted-foreground uppercase font-semibold">Avg Loss</p>
-                        <p className="text-sm font-medium text-red-500">-${avgLoss.toFixed(2)}</p>
+                        <p className="text-sm font-medium text-red-500">
+                           {/* ✅ Use Format */}
+                           -{format(avgLoss)}
+                        </p>
                       </div>
                     </div>
                   </div>

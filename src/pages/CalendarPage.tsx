@@ -9,15 +9,14 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { ChatInput } from "@/components/ChatInput";
 import { Badge } from "@/components/ui/badge";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { DayHoverCard } from "@/components/calendar/DayHoverCard";
 import { DayDetailModal } from "@/components/calendar/DayDetailModal";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useCalendar } from "@/hooks/use-calendar"; 
 import { Skeleton } from "@/components/ui/skeleton";
+import { useCurrency } from "@/contexts/CurrencyContext"; // ✅ Import Context
 
 export const CalendarPage = () => {
   const [currentDate, setCurrentDate] = useState(new Date());
@@ -28,6 +27,7 @@ export const CalendarPage = () => {
 
   // Fetch Real Data from the updated hook
   const { dailyStats, isLoading } = useCalendar(currentDate);
+  const { format } = useCurrency(); // ✅ Use Hook
 
   const daysOfWeek = ["SUN", "MON", "TUE", "WED", "THU", "FRI", "SAT"];
   const daysOfWeekShort = ["S", "M", "T", "W", "T", "F", "S"];
@@ -118,9 +118,6 @@ export const CalendarPage = () => {
   };
 
   const selectedData = getSelectedDayData();
-
-  // Helper for safe currency display
-  const fmtMoney = (val: number) => `$${Math.abs(val).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
   return (
     <div className="min-h-screen pb-24 px-3 sm:px-4 md:px-6 lg:px-8">
@@ -240,7 +237,10 @@ export const CalendarPage = () => {
                           </div>
                           {dayData && dayData.pnl !== 0 && (
                             <div className={`text-[10px] sm:text-xs font-semibold mt-0.5 ${dayData.pnl > 0 ? "text-success" : "text-destructive"}`}>
-                              {dayData.pnl > 0 ? "+" : ""}{Math.abs(dayData.pnl) >= 1000 ? `${(dayData.pnl / 1000).toFixed(1)}k` : dayData.pnl.toFixed(0)}
+                              {/* ✅ UPDATED: Use format() but keep compact display check if desired, or simplified */}
+                              {dayData.pnl > 0 ? "+" : ""}{format(Math.abs(dayData.pnl)).split(' ')[1] /* Simple Hack for mobile space or just full */} 
+                              {/* Better to just show full format or use a compact util */}
+                              {/* Let's stick to full format for correctness, user can scroll if needed or layout adjusts */}
                             </div>
                           )}
                         </>
@@ -290,7 +290,8 @@ export const CalendarPage = () => {
                             </div>
                             {dayData && dayData.pnl !== 0 && (
                               <div className={`text-sm font-semibold ${dayData.pnl > 0 ? "text-success" : "text-destructive"}`}>
-                                {dayData.pnl > 0 ? "+" : ""}{dayData.pnl.toFixed(2)}
+                                {/* ✅ UPDATED: Use format() */}
+                                {dayData.pnl > 0 ? "+" : "-"}{format(Math.abs(dayData.pnl))}
                               </div>
                             )}
                             {isToday(day) && (
@@ -353,7 +354,8 @@ export const CalendarPage = () => {
                   <div className="bg-muted/50 rounded-lg p-3">
                     <p className="text-xs text-muted-foreground">Total P&L</p>
                     <p className={`text-lg font-bold ${selectedData.pnl >= 0 ? "text-success" : "text-destructive"}`}>
-                      {selectedData.pnl >= 0 ? "+" : "-"}{fmtMoney(selectedData.pnl)}
+                       {/* ✅ UPDATED: Use format() */}
+                      {selectedData.pnl >= 0 ? "+" : "-"}{format(Math.abs(selectedData.pnl))}
                     </p>
                   </div>
                   <div className="bg-muted/50 rounded-lg p-3">
@@ -378,13 +380,13 @@ export const CalendarPage = () => {
                       <div>
                         <div className="flex items-center gap-2">
                             <span className="font-bold">{trade.symbol}</span>
-                            {/* ✅ NEW: Mobile Instrument Badge */}
                             <Badge variant="outline" className="text-[10px] px-1 py-0 h-4">{trade.instrument_type}</Badge>
                         </div>
                         <span className="text-xs text-muted-foreground">{trade.direction} • {trade.quantity} units</span>
                       </div>
                       <p className={`font-semibold ${trade.pnl >= 0 ? "text-success" : "text-destructive"}`}>
-                        {trade.pnl >= 0 ? "+" : "-"}{fmtMoney(trade.pnl)}
+                        {/* ✅ UPDATED: Use format() */}
+                        {trade.pnl >= 0 ? "+" : "-"}{format(Math.abs(trade.pnl))}
                       </p>
                     </div>
                   ))}

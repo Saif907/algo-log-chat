@@ -12,6 +12,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useToast } from "@/hooks/use-toast";
 import { api } from "@/services/api";
+import { useCurrency } from "@/contexts/CurrencyContext"; // ✅ Import Context
 
 // ✅ Import the Edit Modal
 import { EditStrategyModal } from "@/components/strategies/EditStrategyModal";
@@ -21,6 +22,7 @@ export const StrategyDetail = () => {
   const { id } = useParams<{ id: string }>();
   const { toast } = useToast();
   const queryClient = useQueryClient();
+  const { format, currency } = useCurrency(); // ✅ Use Hook
   
   const [isEditOpen, setIsEditOpen] = useState(false);
 
@@ -87,7 +89,7 @@ export const StrategyDetail = () => {
   const netPL = grossProfit - grossLoss;
   const winRate = totalTrades > 0 ? (winners.length / totalTrades) * 100 : 0;
   
-  // Profit Factor Logic (Matches Backend)
+  // Profit Factor Logic
   let profitFactor = 0;
   if (totalTrades > 0) {
       if (grossLoss < 0.01) profitFactor = 100; // No Loss
@@ -148,12 +150,9 @@ export const StrategyDetail = () => {
           </div>
           
           <div className="flex gap-2">
-            {/* ✅ FIXED: Edit Button now opens modal */}
             <Button variant="outline" size="icon" onClick={() => setIsEditOpen(true)}>
               <Edit className="h-4 w-4" />
             </Button>
-            
-            {/* ✅ FIXED: Delete Button now works */}
             <Button variant="outline" size="icon" className="text-destructive hover:bg-destructive/10" onClick={handleDelete}>
               <Trash2 className="h-4 w-4" />
             </Button>
@@ -191,11 +190,14 @@ export const StrategyDetail = () => {
 
           <Card>
             <CardHeader className="pb-3">
-              <CardTitle className="text-sm font-medium text-muted-foreground">Net P&L</CardTitle>
+              <CardTitle className="text-sm font-medium text-muted-foreground">
+                Net P&L ({currency})
+              </CardTitle>
             </CardHeader>
             <CardContent>
               <div className={`text-3xl font-bold ${netPL >= 0 ? "text-success" : "text-destructive"}`}>
-                ${netPL.toFixed(2)}
+                {/* ✅ Use Format */}
+                {netPL >= 0 ? "+" : ""}{format(Math.abs(netPL))}
               </div>
             </CardContent>
           </Card>
@@ -220,21 +222,24 @@ export const StrategyDetail = () => {
               <div>
                 <p className="text-sm text-muted-foreground mb-1">Expectancy</p>
                 <p className={`text-xl font-semibold ${expectancy > 0 ? "text-success" : ""}`}>
-                    ${expectancy.toFixed(2)}
+                    {/* ✅ Use Format */}
+                    {format(expectancy)}
                 </p>
               </div>
               <div>
                 <p className="text-sm text-muted-foreground mb-1">Avg Winner</p>
                 <p className="text-xl font-semibold text-success flex items-center gap-1">
                   <TrendingUp className="h-4 w-4" />
-                  ${avgWin.toFixed(2)}
+                  {/* ✅ Use Format */}
+                  +{format(avgWin)}
                 </p>
               </div>
               <div>
                 <p className="text-sm text-muted-foreground mb-1">Avg Loser</p>
                 <p className="text-xl font-semibold text-destructive flex items-center gap-1">
                   <TrendingDown className="h-4 w-4" />
-                  -${avgLoss.toFixed(2)}
+                  {/* ✅ Use Format */}
+                  -{format(avgLoss)}
                 </p>
               </div>
             </div>

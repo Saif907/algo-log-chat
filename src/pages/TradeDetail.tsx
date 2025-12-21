@@ -1,3 +1,4 @@
+// frontend/src/pages/TradeDetail.tsx
 import { useEffect, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
@@ -22,6 +23,7 @@ import { EditTradeModal } from "@/components/trades/EditTradeModal";
 
 import { useAuth } from "@/contexts/AuthContext";
 import { useModal } from "@/contexts/ModalContext";
+import { useCurrency } from "@/contexts/CurrencyContext"; // ✅ Import Currency Context
 
 export const TradeDetail = () => {
   const { id } = useParams<{ id: string }>();
@@ -31,6 +33,8 @@ export const TradeDetail = () => {
 
   const { plan } = useAuth();
   const { openUpgradeModal } = useModal();
+  const { format, currency } = useCurrency(); // ✅ Use Hook
+  
   // Check strict plan matching
   const isPro = plan?.toUpperCase() === "PRO" || plan?.toUpperCase() === "FOUNDER";
 
@@ -107,7 +111,6 @@ export const TradeDetail = () => {
     setIsEditOpen(open);
     if (!open) {
         // ✅ CRITICAL FIX: When modal closes, force refresh the data.
-        // This ensures screenshots uploaded in the modal appear immediately.
         queryClient.invalidateQueries({ queryKey: ["trade", id] });
         queryClient.invalidateQueries({ queryKey: ["trade-screenshots", id] });
         refetchScreenshots();
@@ -166,9 +169,11 @@ export const TradeDetail = () => {
 
           <div className="flex items-center justify-between sm:justify-end gap-4">
             <div className="text-left sm:text-right">
-              <p className="text-xs sm:text-sm text-muted-foreground mb-0.5 sm:mb-1">NET P&L</p>
+              <p className="text-xs sm:text-sm text-muted-foreground mb-0.5 sm:mb-1">
+                NET P&L ({currency})
+              </p>
               <p className={`text-2xl sm:text-3xl font-bold ${isProfitable ? "text-success" : "text-destructive"}`}>
-                ${isProfitable ? "+" : ""}{(trade.pnl ?? 0).toFixed(2)}
+                {isProfitable ? "+" : ""}{format(trade.pnl ?? 0)}
               </p>
               <p className="text-xs sm:text-sm text-muted-foreground mt-0.5 sm:mt-1">
                 R: {rMultiple}R
@@ -193,16 +198,16 @@ export const TradeDetail = () => {
         trade={trade}
       />
 
-      {/* Metrics */}
+      {/* Metrics Grid - Updated with format() */}
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3 sm:gap-4">
         {[
-          { label: "ENTRY", value: `$${trade.entry_price}` },
-          { label: "EXIT", value: trade.exit_price ? `$${trade.exit_price}` : "-" },
-          { label: "STOP LOSS", value: trade.stop_loss ? `$${trade.stop_loss}` : "-" },
-          { label: "TARGET", value: trade.target ? `$${trade.target}` : "-" },
+          { label: "ENTRY", value: format(trade.entry_price) },
+          { label: "EXIT", value: trade.exit_price ? format(trade.exit_price) : "-" },
+          { label: "STOP LOSS", value: trade.stop_loss ? format(trade.stop_loss) : "-" },
+          { label: "TARGET", value: trade.target ? format(trade.target) : "-" },
           { label: "R : R", value: `1 : ${rMultiple}` },
-          { label: "RISK", value: `$${riskAmount.toFixed(2)}`, className: "text-destructive" },
-          { label: "QUANTITY", value: trade.quantity },
+          { label: "RISK", value: format(riskAmount), className: "text-destructive" },
+          { label: "QUANTITY", value: trade.quantity }, // Quantity is not currency
           { label: "HOLD TIME", value: holdingTime },
         ].map((item, idx) => (
           <Card key={idx} className="p-3 sm:p-6">
@@ -354,7 +359,8 @@ export const TradeDetail = () => {
                 <span className={`text-sm font-mono font-medium ${
                   (relatedTrade.pnl || 0) >= 0 ? "text-success" : "text-destructive"
                 }`}>
-                  ${(relatedTrade.pnl || 0) >= 0 ? "+" : ""}{Math.abs(relatedTrade.pnl || 0).toFixed(2)}
+                  {/* ✅ Updated with format() */}
+                  {(relatedTrade.pnl || 0) >= 0 ? "+" : ""}{format(Math.abs(relatedTrade.pnl || 0))}
                 </span>
               </div>
             )) : (

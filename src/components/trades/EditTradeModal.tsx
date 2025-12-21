@@ -1,3 +1,4 @@
+// frontend/src/components/trades/EditTradeModal.tsx
 import { useState, useEffect } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -53,6 +54,7 @@ import { api, Trade } from "@/services/api";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/contexts/AuthContext";
 import { useModal } from "@/contexts/ModalContext";
+import { useCurrency } from "@/contexts/CurrencyContext"; // ✅ Added Currency Context
 
 /* -------------------- Schema -------------------- */
 const formSchema = z
@@ -113,6 +115,7 @@ export const EditTradeModal = ({ trade, existingScreenshots = [], open, onOpenCh
   const { toast } = useToast();
   const { plan } = useAuth();
   const { openUpgradeModal } = useModal();
+  const { currency, rate } = useCurrency(); // ✅ Get currency info
   const isPro = plan === "PRO" || plan === "FOUNDER";
 
   const [showAdvanced, setShowAdvanced] = useState(false);
@@ -136,24 +139,27 @@ export const EditTradeModal = ({ trade, existingScreenshots = [], open, onOpenCh
     },
   });
 
-  // ✅ Hydrate Form from Props (No API calls!)
+  // ✅ Hydrate Form from Props (Convert USD -> User Currency)
   useEffect(() => {
     if (trade && open) {
+      // Helper to convert DB value (USD) to displayed value (User Currency)
+      const toUserCurrency = (val?: number) => (val !== undefined && val !== null) ? val * (rate || 1) : undefined;
+
       form.reset({
         symbol: trade.symbol,
         instrument_type: trade.instrument_type,
         direction: trade.direction,
         status: trade.status,
-        entry_price: trade.entry_price,
+        entry_price: toUserCurrency(trade.entry_price), // Convert
         quantity: trade.quantity,
         entry_datetime: new Date(trade.entry_time),
         
-        exit_price: trade.exit_price,
+        exit_price: toUserCurrency(trade.exit_price), // Convert
         exit_datetime: trade.exit_time ? new Date(trade.exit_time) : undefined,
         
-        stop_loss: trade.stop_loss,
-        target: trade.target,
-        fees: trade.fees || 0,
+        stop_loss: toUserCurrency(trade.stop_loss), // Convert
+        target: toUserCurrency(trade.target), // Convert
+        fees: toUserCurrency(trade.fees) || 0, // Convert
         
         strategy_id: trade.strategy_id || "none",
         notes: trade.notes || "",
@@ -166,7 +172,7 @@ export const EditTradeModal = ({ trade, existingScreenshots = [], open, onOpenCh
         setShowAdvanced(true);
       }
     }
-  }, [trade, open, form]);
+  }, [trade, open, form, rate]);
 
   // Preview Logic for NEW files
   const watchScreenshots = form.watch("new_screenshots");
@@ -241,18 +247,22 @@ export const EditTradeModal = ({ trade, existingScreenshots = [], open, onOpenCh
       const entryIso = values.entry_datetime.toISOString();
       const exitIso = values.exit_datetime ? values.exit_datetime.toISOString() : undefined;
 
+      // ✅ Currency Conversion: Convert User Currency -> USD before saving
+      const appliedRate = (currency !== "USD" && rate > 0) ? rate : 1;
+      const toUSD = (val?: number) => (val !== undefined && val !== null) ? val / appliedRate : undefined;
+
       const payload: any = {
         symbol: values.symbol,
         instrument_type: values.instrument_type,
         direction: values.direction,
         status: values.status,
-        entry_price: values.entry_price,
+        entry_price: toUSD(values.entry_price),
         quantity: values.quantity,
         entry_time: entryIso,
-        fees: values.fees || 0,
-        stop_loss: values.stop_loss,
-        target: values.target,
-        exit_price: values.exit_price,
+        fees: toUSD(values.fees) || 0,
+        stop_loss: toUSD(values.stop_loss),
+        target: toUSD(values.target),
+        exit_price: toUSD(values.exit_price),
         exit_time: exitIso,
         strategy_id: values.strategy_id === "none" ? undefined : values.strategy_id,
         notes: values.notes,
@@ -417,7 +427,7 @@ export const EditTradeModal = ({ trade, existingScreenshots = [], open, onOpenCh
             {/* Entry Data */}
             <div className="p-3 bg-muted/30 rounded-lg border border-border/50 grid grid-cols-1 sm:grid-cols-3 gap-3">
                 <FormField control={form.control} name="entry_datetime" render={({ field }) => <DatePickerField field={field} label="Entry Date" />} />
-                <FormField control={form.control} name="entry_price" render={({ field }) => <FormItem><FormLabel className="text-xs">Entry Price</FormLabel><Input type="number" step="any" {...field} /><FormMessage /></FormItem>} />
+                <FormField control={form.control} name="entry_price" render={({ field }) => <FormItem><FormLabel className="text-xs">Entry Price ({currency})</FormLabel><Input type="number" step="any" {...field} /><FormMessage /></FormItem>} />
                 <FormField control={form.control} name="quantity" render={({ field }) => <FormItem><FormLabel className="text-xs">Quantity</FormLabel><Input type="number" step="any" {...field} /><FormMessage /></FormItem>} />
             </div>
 
@@ -425,8 +435,8 @@ export const EditTradeModal = ({ trade, existingScreenshots = [], open, onOpenCh
             {form.watch("status") === "CLOSED" && (
                 <div className="p-3 bg-blue-500/5 rounded-lg border border-blue-500/10 grid grid-cols-1 sm:grid-cols-3 gap-3 animate-in fade-in slide-in-from-top-1">
                     <FormField control={form.control} name="exit_datetime" render={({ field }) => <DatePickerField field={field} label="Exit Date" minDate={form.getValues("entry_datetime")} />} />
-                    <FormField control={form.control} name="exit_price" render={({ field }) => <FormItem><FormLabel className="text-xs">Exit Price</FormLabel><Input type="number" step="any" {...field} /><FormMessage /></FormItem>} />
-                    <FormField control={form.control} name="fees" render={({ field }) => <FormItem><FormLabel className="text-xs">Fees</FormLabel><Input type="number" step="0.01" {...field} /></FormItem>} />
+                    <FormField control={form.control} name="exit_price" render={({ field }) => <FormItem><FormLabel className="text-xs">Exit Price ({currency})</FormLabel><Input type="number" step="any" {...field} /><FormMessage /></FormItem>} />
+                    <FormField control={form.control} name="fees" render={({ field }) => <FormItem><FormLabel className="text-xs">Fees ({currency})</FormLabel><Input type="number" step="0.01" {...field} /></FormItem>} />
                 </div>
             )}
 
@@ -437,8 +447,8 @@ export const EditTradeModal = ({ trade, existingScreenshots = [], open, onOpenCh
             {showAdvanced && (
                 <div className="space-y-4 pt-2 border-t">
                     <div className="grid grid-cols-2 gap-3">
-                        <FormField control={form.control} name="stop_loss" render={({ field }) => <FormItem><FormLabel className="text-xs">Stop Loss</FormLabel><Input type="number" step="any" {...field} /></FormItem>} />
-                        <FormField control={form.control} name="target" render={({ field }) => <FormItem><FormLabel className="text-xs">Target</FormLabel><Input type="number" step="any" {...field} /></FormItem>} />
+                        <FormField control={form.control} name="stop_loss" render={({ field }) => <FormItem><FormLabel className="text-xs">Stop Loss ({currency})</FormLabel><Input type="number" step="any" {...field} /></FormItem>} />
+                        <FormField control={form.control} name="target" render={({ field }) => <FormItem><FormLabel className="text-xs">Target ({currency})</FormLabel><Input type="number" step="any" {...field} /></FormItem>} />
                     </div>
 
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-3">

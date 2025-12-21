@@ -1,8 +1,10 @@
+// frontend/src/components/analytics/TimeAnalysis.tsx
 import { Card } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, ResponsiveContainer, Cell, Tooltip } from "recharts";
 import { useState, useMemo } from "react";
-import { format, parseISO, startOfWeek } from "date-fns";
+import { format as formatDate, parseISO, startOfWeek } from "date-fns";
+import { useCurrency } from "@/contexts/CurrencyContext"; // ✅ Import Context
 
 interface Props {
   rawTrades: any[];
@@ -10,9 +12,10 @@ interface Props {
 }
 
 export const TimeAnalysis = ({ rawTrades, hourlyHeatmap }: Props) => {
+  const { format, convert, currency } = useCurrency(); // ✅ Use Hook
   const [timeRange, setTimeRange] = useState("monthly");
 
-  // Calculate P&L groupings on the fly
+  // Calculate P&L groupings on the fly (WITH CONVERSION)
   const pnlData = useMemo(() => {
     const daily: Record<string, number> = { Mon:0, Tue:0, Wed:0, Thu:0, Fri:0 };
     const weekly: Record<string, number> = {};
@@ -20,34 +23,32 @@ export const TimeAnalysis = ({ rawTrades, hourlyHeatmap }: Props) => {
 
     rawTrades.forEach(t => {
       const date = parseISO(t.entry_time);
-      const pnl = t.pnl || 0;
+      const pnl = convert(t.pnl || 0); // ✅ Convert here
 
-      // Daily (Day of Week)
-      const dayName = format(date, 'eee'); // Mon, Tue...
+      // Daily
+      const dayName = formatDate(date, 'eee');
       if (daily[dayName] !== undefined) {
         daily[dayName] += pnl;
       }
 
       // Monthly
-      const monthName = format(date, 'MMM');
+      const monthName = formatDate(date, 'MMM');
       monthly[monthName] = (monthly[monthName] || 0) + pnl;
 
       // Weekly
-      const weekStart = format(startOfWeek(date), 'MMM dd');
+      const weekStart = formatDate(startOfWeek(date), 'MMM dd');
       weekly[weekStart] = (weekly[weekStart] || 0) + pnl;
     });
 
-    // Convert to arrays for Recharts
     const dailyArr = ["Mon", "Tue", "Wed", "Thu", "Fri"].map(day => ({ name: day, value: daily[day] }));
     const monthlyArr = Object.entries(monthly).map(([name, value]) => ({ name, value }));
     const weeklyArr = Object.entries(weekly).map(([name, value]) => ({ name, value }));
 
     return { daily: dailyArr, weekly: weeklyArr, monthly: monthlyArr };
-  }, [rawTrades]);
+  }, [rawTrades, convert]); // Re-calc on convert change
 
   const currentData = pnlData[timeRange as keyof typeof pnlData] || pnlData.monthly;
   
-  // Calculate summary stats for the selected period
   const totalPeriodPnL = currentData.reduce((acc, curr) => acc + curr.value, 0);
   const sortedData = [...currentData].sort((a, b) => b.value - a.value);
   const bestPeriod = sortedData[0] || { value: 0 };
@@ -58,7 +59,7 @@ export const TimeAnalysis = ({ rawTrades, hourlyHeatmap }: Props) => {
     <div className="space-y-4 sm:space-y-6">
       {/* Header & Selector */}
       <div className="flex items-center justify-between">
-        <h2 className="text-base sm:text-lg font-semibold">Time Analysis</h2>
+        <h2 className="text-base sm:text-lg font-semibold">Time Analysis ({currency})</h2>
         <Select value={timeRange} onValueChange={setTimeRange}>
           <SelectTrigger className="w-[140px]">
             <SelectValue placeholder="Select range" />
@@ -76,25 +77,25 @@ export const TimeAnalysis = ({ rawTrades, hourlyHeatmap }: Props) => {
         <Card className="p-4 sm:p-6">
           <p className="text-[10px] sm:text-sm text-muted-foreground mb-0.5 sm:mb-1">TOTAL P&L</p>
           <p className={`text-xl sm:text-3xl font-bold ${totalPeriodPnL >= 0 ? "text-success" : "text-destructive"}`}>
-            ${totalPeriodPnL.toLocaleString(undefined, { maximumFractionDigits: 0 })}
+            {format(totalPeriodPnL)}
           </p>
         </Card>
         <Card className="p-4 sm:p-6">
           <p className="text-[10px] sm:text-sm text-muted-foreground mb-0.5 sm:mb-1">BEST</p>
           <p className="text-xl sm:text-3xl font-bold text-success">
-            ${bestPeriod.value.toLocaleString(undefined, { maximumFractionDigits: 0 })}
+            {format(bestPeriod.value)}
           </p>
         </Card>
         <Card className="p-4 sm:p-6">
           <p className="text-[10px] sm:text-sm text-muted-foreground mb-0.5 sm:mb-1">WORST</p>
           <p className="text-xl sm:text-3xl font-bold text-destructive">
-            ${worstPeriod.value.toLocaleString(undefined, { maximumFractionDigits: 0 })}
+            {format(worstPeriod.value)}
           </p>
         </Card>
         <Card className="p-4 sm:p-6">
           <p className="text-[10px] sm:text-sm text-muted-foreground mb-0.5 sm:mb-1">AVERAGE</p>
           <p className={`text-xl sm:text-3xl font-bold ${avgPeriod >= 0 ? "text-success" : "text-destructive"}`}>
-            ${avgPeriod.toLocaleString(undefined, { maximumFractionDigits: 0 })}
+            {format(avgPeriod)}
           </p>
         </Card>
       </div>
@@ -110,7 +111,6 @@ export const TimeAnalysis = ({ rawTrades, hourlyHeatmap }: Props) => {
             <XAxis dataKey="name" stroke="hsl(var(--muted-foreground))" tick={{ fontSize: 10 }} />
             <YAxis stroke="hsl(var(--muted-foreground))" tick={{ fontSize: 10 }} />
             
-            {/* ✅ FIXED: Tooltip Colors */}
             <Tooltip 
               cursor={{fill: 'transparent'}}
               contentStyle={{ 
@@ -120,6 +120,7 @@ export const TimeAnalysis = ({ rawTrades, hourlyHeatmap }: Props) => {
                 borderRadius: "8px"
               }}
               itemStyle={{ color: 'hsl(var(--popover-foreground))' }}
+              formatter={(val: number) => format(val)}
             />
             
             <Bar dataKey="value" radius={[4, 4, 0, 0]}>
@@ -157,25 +158,29 @@ export const TimeAnalysis = ({ rawTrades, hourlyHeatmap }: Props) => {
                 <tr key={row.hour}>
                   <td className="text-[10px] sm:text-xs p-2 font-medium">{row.hour}</td>
                   {["mon", "tue", "wed", "thu", "fri"].map((day) => {
-                    const value = row[day as keyof typeof row] as number;
-                    // Calculate intensity: Cap at $500 for max color saturation
-                    const intensity = Math.min(Math.abs(value) / 500, 1);
+                    const rawValue = row[day as keyof typeof row] as number;
+                    const convertedValue = convert(rawValue); // ✅ Convert for Display
+                    
+                    // Intensity still based on USD (roughly) or we can just use converted value
+                    // Using converted value ensures heatmap scales if user switches to weaker currency (e.g. INR)
+                    const intensity = Math.min(Math.abs(convertedValue) / (500 * (convert(1) || 1)), 1);
+
                     return (
                       <td key={day} className="p-1">
                         <div
                           className={`h-8 sm:h-10 rounded flex items-center justify-center text-[10px] sm:text-xs font-medium ${
-                            value > 0 ? "text-success-foreground" : value < 0 ? "text-destructive-foreground" : "text-muted-foreground"
+                            convertedValue > 0 ? "text-success-foreground" : convertedValue < 0 ? "text-destructive-foreground" : "text-muted-foreground"
                           }`}
                           style={{
-                            backgroundColor: value > 0 
+                            backgroundColor: convertedValue > 0 
                               ? `hsla(142, 76%, 36%, ${intensity})` 
-                              : value < 0 
+                              : convertedValue < 0 
                                 ? `hsla(0, 84%, 60%, ${intensity})` 
                                 : "transparent",
-                            opacity: value === 0 ? 0.5 : 1
+                            opacity: convertedValue === 0 ? 0.5 : 1
                           }}
                         >
-                          {value !== 0 ? (value > 0 ? `+${value.toFixed(0)}` : value.toFixed(0)) : "-"}
+                          {convertedValue !== 0 ? (convertedValue > 0 ? `+${convertedValue.toFixed(0)}` : convertedValue.toFixed(0)) : "-"}
                         </div>
                       </td>
                     );

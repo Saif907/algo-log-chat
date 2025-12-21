@@ -44,6 +44,7 @@ import { api } from "@/services/api";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/contexts/AuthContext";
 import { useModal } from "@/contexts/ModalContext";
+import { useCurrency } from "@/contexts/CurrencyContext"; // ✅ Added Currency Context
 
 /* -------------------- Schema -------------------- */
 const formSchema = z
@@ -143,6 +144,7 @@ export const AddTradeModal = ({ open, onOpenChange }: Props) => {
   const { toast } = useToast();
   const { plan } = useAuth();
   const { openUpgradeModal } = useModal();
+  const { currency, rate } = useCurrency(); // ✅ Get currency rate
   const isPro = plan === "PRO" || plan === "FOUNDER";
 
   const [showAdvanced, setShowAdvanced] = useState(false);
@@ -328,18 +330,22 @@ export const AddTradeModal = ({ open, onOpenChange }: Props) => {
       const entryIso = (values.entry_datetime as unknown as Date).toISOString();
       const exitIso = values.exit_datetime ? (values.exit_datetime as unknown as Date).toISOString() : undefined;
 
+      // ✅ Currency Conversion: Convert from User Currency -> USD before saving
+      const appliedRate = (currency !== "USD" && rate > 0) ? rate : 1;
+      const toUSD = (val?: number) => (val !== undefined && val !== null) ? val / appliedRate : undefined;
+
       const payload: any = {
         symbol: values.symbol,
         instrument_type: values.instrument_type,
         direction: values.direction,
         status: values.status,
-        entry_price: values.entry_price,
+        entry_price: toUSD(values.entry_price),
         quantity: values.quantity,
         entry_time: entryIso,
-        fees: values.fees || 0,
-        stop_loss: values.stop_loss,
-        target: values.target,
-        exit_price: values.exit_price,
+        fees: toUSD(values.fees) || 0,
+        stop_loss: toUSD(values.stop_loss),
+        target: toUSD(values.target),
+        exit_price: toUSD(values.exit_price),
         exit_time: exitIso,
         strategy_id: values.strategy_id === "none" ? undefined : values.strategy_id,
         notes: values.notes || undefined,
@@ -571,7 +577,7 @@ export const AddTradeModal = ({ open, onOpenChange }: Props) => {
                     name="entry_price" 
                     render={({ field }) => (
                         <FormItem>
-                            <FormLabel className="text-xs">Avg Price</FormLabel>
+                            <FormLabel className="text-xs">Avg Price ({currency})</FormLabel>
                             <FormControl>
                                 <Input type="number" step={getStep(watchValues.instrument_type)} placeholder="0.00" {...field} value={field.value ?? ""} onChange={(e) => field.onChange(e.target.value === "" ? undefined : Number(e.target.value))} />
                             </FormControl>
@@ -600,7 +606,7 @@ export const AddTradeModal = ({ open, onOpenChange }: Props) => {
               <section className="space-y-2 pt-3 border-t">
                 <div className="flex items-center justify-between">
                   <h3 className="text-sm font-medium text-muted-foreground">Exit</h3>
-                  {pnl !== null && (<div className="text-sm font-mono">Net PnL: <span className={pnl >= 0 ? "text-green-600" : "text-red-600"}>{pnl.toFixed(2)}</span></div>)}
+                  {pnl !== null && (<div className="text-sm font-mono">Net PnL ({currency}): <span className={pnl >= 0 ? "text-green-600" : "text-red-600"}>{pnl.toFixed(2)}</span></div>)}
                 </div>
                 <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3">
                    {/* ✅ FIX: Exit Date uses same DatePicker, but with minDate constraint */}
@@ -615,8 +621,8 @@ export const AddTradeModal = ({ open, onOpenChange }: Props) => {
                         />
                       )} 
                    />
-                   <FormField control={form.control} name="exit_price" render={({ field }) => (<FormItem><FormLabel className="text-xs">Exit Price</FormLabel><Input type="number" step={getStep(watchValues.instrument_type)} placeholder="0.00" {...field} value={field.value ?? ""} onChange={(e) => field.onChange(e.target.value === "" ? undefined : Number(e.target.value))} /><FormMessage /></FormItem>)} />
-                   <FormField control={form.control} name="fees" render={({ field }) => (<FormItem><FormLabel className="text-xs">Fees</FormLabel><Input type="number" step="0.01" placeholder="0.00" {...field} value={field.value ?? ""} onChange={(e) => field.onChange(e.target.value === "" ? 0 : e.target.value)} /></FormItem>)} />
+                   <FormField control={form.control} name="exit_price" render={({ field }) => (<FormItem><FormLabel className="text-xs">Exit Price ({currency})</FormLabel><Input type="number" step={getStep(watchValues.instrument_type)} placeholder="0.00" {...field} value={field.value ?? ""} onChange={(e) => field.onChange(e.target.value === "" ? undefined : Number(e.target.value))} /><FormMessage /></FormItem>)} />
+                   <FormField control={form.control} name="fees" render={({ field }) => (<FormItem><FormLabel className="text-xs">Fees ({currency})</FormLabel><Input type="number" step="0.01" placeholder="0.00" {...field} value={field.value ?? ""} onChange={(e) => field.onChange(e.target.value === "" ? 0 : e.target.value)} /></FormItem>)} />
                 </div>
               </section>
             )}
@@ -646,7 +652,7 @@ export const AddTradeModal = ({ open, onOpenChange }: Props) => {
 
                       return (
                         <FormItem>
-                          <FormLabel className="text-xs">Stop Loss</FormLabel>
+                          <FormLabel className="text-xs">Stop Loss ({currency})</FormLabel>
                           <FormControl>
                             <Input
                               type="number"
@@ -676,7 +682,7 @@ export const AddTradeModal = ({ open, onOpenChange }: Props) => {
 
                       return (
                         <FormItem>
-                          <FormLabel className="text-xs">Target</FormLabel>
+                          <FormLabel className="text-xs">Target ({currency})</FormLabel>
                           <FormControl>
                             <Input
                               type="number"

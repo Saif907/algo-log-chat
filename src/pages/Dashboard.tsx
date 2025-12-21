@@ -1,16 +1,17 @@
 // frontend/src/pages/Dashboard.tsx
 import { Card } from "@/components/ui/card";
-import { ChatInput } from "@/components/ChatInput";
 import { AreaChart, Area, BarChart, Bar, XAxis, YAxis, CartesianGrid, ResponsiveContainer, Cell, Tooltip } from "recharts";
-import { ArrowUpRight, ArrowDownRight, TrendingUp } from "lucide-react";
+import { ArrowUpRight, ArrowDownRight } from "lucide-react";
 import { useDashboard } from "@/hooks/use-dashboard";
+import { useCurrency } from "@/contexts/CurrencyContext"; // ✅ Import Context
 import { Skeleton } from "@/components/ui/skeleton";
 import { useNavigate } from "react-router-dom";
 import { Badge } from "@/components/ui/badge";
-import { startOfMonth, endOfMonth, getDay, getDate, isSameMonth, format } from "date-fns";
+import { startOfMonth, endOfMonth, getDay, getDate, format as formatDate } from "date-fns";
 
 export const Dashboard = () => {
   const { stats, isLoading } = useDashboard();
+  const { format, convert, currency } = useCurrency(); // ✅ Use Hook
   const navigate = useNavigate();
 
   if (isLoading || !stats) {
@@ -27,8 +28,11 @@ export const Dashboard = () => {
     );
   }
 
-  const fmtCurrency = (val: number) => `$${Number(val || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+  // ✅ Prepare Chart Data with Converted Values
+  const cumulativeData = stats.cumulativeData.map(d => ({ ...d, value: convert(d.value) }));
+  const dailyData = stats.dailyData.map(d => ({ ...d, value: convert(d.value) }));
 
+  // Calendar Logic
   const today = new Date();
   const monthStart = startOfMonth(today);
   const monthEnd = endOfMonth(today);
@@ -42,7 +46,7 @@ export const Dashboard = () => {
 
   const getDayStatus = (day: number) => {
     if (!day) return null;
-    const dateStr = format(new Date(today.getFullYear(), today.getMonth(), day), 'MMM dd');
+    const dateStr = formatDate(new Date(today.getFullYear(), today.getMonth(), day), 'MMM dd');
     const dayStat = stats.dailyData.find(d => d.date === dateStr);
     
     if (!dayStat) return "none";
@@ -55,9 +59,11 @@ export const Dashboard = () => {
     <div className="min-h-screen p-4 sm:p-6 space-y-4 sm:space-y-6 pb-28 sm:pb-32">
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
         <Card className="p-4 sm:p-6">
-          <p className="text-[10px] sm:text-sm text-muted-foreground mb-0.5 sm:mb-1">NET P/L</p>
+          <p className="text-[10px] sm:text-sm text-muted-foreground mb-0.5 sm:mb-1">
+            NET P/L ({currency})
+          </p>
           <p className={`text-xl sm:text-3xl font-bold ${stats.netPL >= 0 ? 'text-success' : 'text-destructive'}`}>
-            {stats.netPL >= 0 ? "+" : ""}{fmtCurrency(stats.netPL)}
+            {stats.netPL >= 0 ? "+" : ""}{format(Math.abs(stats.netPL))}
           </p>
           <div className="flex items-center gap-1 mt-1 sm:mt-2">
             {stats.netPL >= 0 ? (
@@ -100,12 +106,12 @@ export const Dashboard = () => {
           <div className="space-y-1.5 sm:space-y-2 mt-1.5 sm:mt-2">
             <div className="flex items-center gap-2">
               <div className="flex-1 h-6 sm:h-8 bg-success rounded flex items-center px-2 text-success-foreground text-xs font-bold">
-                 {fmtCurrency(stats.avgWin)}
+                 {format(stats.avgWin)}
               </div>
             </div>
             <div className="flex items-center gap-2">
               <div className="flex-1 h-6 sm:h-8 bg-destructive rounded flex items-center px-2 text-destructive-foreground text-xs font-bold">
-                 {fmtCurrency(stats.avgLoss)}
+                 {format(stats.avgLoss)}
               </div>
             </div>
           </div>
@@ -117,11 +123,11 @@ export const Dashboard = () => {
           <div className="flex items-center justify-between mb-3 sm:mb-4">
             <h3 className="text-xs sm:text-sm font-semibold">NET CUMULATIVE P&L</h3>
             <span className={`text-sm sm:text-lg font-bold ${stats.netPL >= 0 ? 'text-success' : 'text-destructive'}`}>
-                {stats.netPL >= 0 ? "+" : ""}{fmtCurrency(stats.netPL)}
+                {stats.netPL >= 0 ? "+" : ""}{format(Math.abs(stats.netPL))}
             </span>
           </div>
           <ResponsiveContainer width="100%" height={160} className="sm:h-[200px]">
-            <AreaChart data={stats.cumulativeData}>
+            <AreaChart data={cumulativeData}>
               <defs>
                 <linearGradient id="colorValue" x1="0" y1="0" x2="0" y2="1">
                   <stop offset="5%" stopColor="hsl(var(--primary))" stopOpacity={0.3} />
@@ -132,7 +138,6 @@ export const Dashboard = () => {
               <XAxis dataKey="date" stroke="hsl(var(--muted-foreground))" tick={{ fontSize: 10 }} />
               <YAxis stroke="hsl(var(--muted-foreground))" tick={{ fontSize: 10 }} />
               
-              {/* ✅ FIXED: Tooltip Colors */}
               <Tooltip 
                 contentStyle={{ 
                   backgroundColor: 'hsl(var(--popover))', 
@@ -140,7 +145,8 @@ export const Dashboard = () => {
                   color: 'hsl(var(--popover-foreground))'
                 }}
                 itemStyle={{ color: 'hsl(var(--popover-foreground))' }}
-                formatter={(value: number) => fmtCurrency(value)}
+                // ✅ Use format directly
+                formatter={(value: number) => [format(value), "Net PnL"]}
               />
               
               <Area type="monotone" dataKey="value" stroke="hsl(var(--primary))" fill="url(#colorValue)" strokeWidth={2} />
@@ -153,12 +159,11 @@ export const Dashboard = () => {
             <h3 className="text-xs sm:text-sm font-semibold">NET DAILY P&L</h3>
           </div>
           <ResponsiveContainer width="100%" height={160} className="sm:h-[200px]">
-            <BarChart data={stats.dailyData}>
+            <BarChart data={dailyData}>
               <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
               <XAxis dataKey="date" stroke="hsl(var(--muted-foreground))" tick={{ fontSize: 10 }} />
               <YAxis stroke="hsl(var(--muted-foreground))" tick={{ fontSize: 10 }} />
               
-              {/* ✅ FIXED: Tooltip Colors */}
               <Tooltip 
                  cursor={{fill: 'hsl(var(--muted)/0.2)'}}
                  contentStyle={{ 
@@ -167,11 +172,11 @@ export const Dashboard = () => {
                    color: 'hsl(var(--popover-foreground))'
                  }}
                  itemStyle={{ color: 'hsl(var(--popover-foreground))' }}
-                 formatter={(value: number) => fmtCurrency(value)}
+                 formatter={(value: number) => [format(value), "Daily PnL"]}
               />
               
               <Bar dataKey="value" radius={[4, 4, 0, 0]}>
-                {stats.dailyData.map((entry, index) => (
+                {dailyData.map((entry, index) => (
                   <Cell key={`cell-${index}`} fill={entry.value >= 0 ? "hsl(var(--success))" : "hsl(var(--destructive))"} />
                 ))}
               </Bar>
@@ -223,7 +228,7 @@ export const Dashboard = () => {
                   <span className={`text-xs sm:text-sm font-semibold w-16 text-right ${
                     instrument.pnl >= 0 ? "text-success" : "text-destructive"
                   }`}>
-                    {instrument.pnl >= 0 ? "+" : ""}{fmtCurrency(instrument.pnl)}
+                    {instrument.pnl >= 0 ? "+" : ""}{format(Math.abs(instrument.pnl))}
                   </span>
                 </div>
               </div>
@@ -264,7 +269,7 @@ export const Dashboard = () => {
                     <span className={`text-xs sm:text-sm font-semibold w-20 text-right ${
                     (trade.pnl || 0) >= 0 ? "text-success" : "text-destructive"
                     }`}>
-                    {(trade.pnl || 0) >= 0 ? "+" : ""}{fmtCurrency(trade.pnl || 0)}
+                    {(trade.pnl || 0) >= 0 ? "+" : ""}{format(Math.abs(trade.pnl || 0))}
                     </span>
                 </div>
               </div>
@@ -274,10 +279,11 @@ export const Dashboard = () => {
           </div>
         </Card>
 
+        {/* ... Calendar Card stays the same ... */}
         <Card className="p-4 sm:p-6">
           <div className="flex items-center justify-between mb-3 sm:mb-4">
             <h3 className="text-xs sm:text-sm font-semibold">MINI CALENDAR</h3>
-            <span className="text-[10px] sm:text-xs text-muted-foreground">{format(today, 'MMMM yyyy')}</span>
+            <span className="text-[10px] sm:text-xs text-muted-foreground">{formatDate(today, 'MMMM yyyy')}</span>
           </div>
           <div className="grid grid-cols-7 gap-1">
             {["S", "M", "T", "W", "T", "F", "S"].map((day, i) => (
@@ -307,8 +313,6 @@ export const Dashboard = () => {
           </div>
         </Card>
       </div>
-
-      
     </div>
   );
 };

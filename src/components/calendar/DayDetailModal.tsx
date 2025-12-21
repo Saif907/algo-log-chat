@@ -1,8 +1,10 @@
+// frontend/src/components/calendar/DayDetailModal.tsx
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { TrendingUp, TrendingDown } from "lucide-react";
+import { useCurrency } from "@/contexts/CurrencyContext"; // ✅ Import Context
 
 interface DayDetailModalProps {
   open: boolean;
@@ -29,6 +31,8 @@ interface DayDetailModalProps {
 }
 
 export const DayDetailModal = ({ open, onOpenChange, date, data }: DayDetailModalProps) => {
+  const { format } = useCurrency(); // ✅ Use Hook
+  
   if (!date || !data) return null;
 
   const formattedDate = date.toLocaleDateString("en-US", { 
@@ -63,7 +67,8 @@ export const DayDetailModal = ({ open, onOpenChange, date, data }: DayDetailModa
                 </CardHeader>
                 <CardContent>
                   <div className={`text-2xl font-bold ${isProfit ? "text-success" : "text-destructive"}`}>
-                    ${isProfit ? "+" : ""}{data.pnl.toFixed(2)}
+                     {/* ✅ Use format */}
+                    {isProfit ? "+" : "-"}{format(Math.abs(data.pnl))}
                   </div>
                 </CardContent>
               </Card>
@@ -123,7 +128,8 @@ export const DayDetailModal = ({ open, onOpenChange, date, data }: DayDetailModa
                   <div className="space-y-1">
                     <div className="font-semibold">{data.bestTrade.symbol}</div>
                     <div className="text-success text-xl font-bold">
-                      +${data.bestTrade.pnl.toFixed(2)}
+                       {/* ✅ Use format */}
+                      +{format(Math.abs(data.bestTrade.pnl))}
                     </div>
                   </div>
                 </CardContent>
@@ -140,7 +146,8 @@ export const DayDetailModal = ({ open, onOpenChange, date, data }: DayDetailModa
                   <div className="space-y-1">
                     <div className="font-semibold">{data.worstTrade.symbol}</div>
                     <div className="text-destructive text-xl font-bold">
-                      ${data.worstTrade.pnl.toFixed(2)}
+                       {/* ✅ Use format */}
+                      -{format(Math.abs(data.worstTrade.pnl))}
                     </div>
                   </div>
                 </CardContent>
@@ -163,11 +170,13 @@ export const DayDetailModal = ({ open, onOpenChange, date, data }: DayDetailModa
                         </Badge>
                         <span className="font-semibold">{trade.symbol}</span>
                         <span className="text-sm text-muted-foreground">
-                          ${trade.entry} → ${trade.exit}
+                           {/* ✅ Use format for prices */}
+                          {format(trade.entry)} → {format(trade.exit)}
                         </span>
                       </div>
                       <span className={trade.pnl > 0 ? "text-success font-semibold" : "text-destructive font-semibold"}>
-                        ${trade.pnl > 0 ? "+" : ""}{trade.pnl.toFixed(2)}
+                         {/* ✅ Use format for PnL */}
+                        {trade.pnl > 0 ? "+" : "-"}{format(Math.abs(trade.pnl))}
                       </span>
                     </div>
                   ))}

@@ -1,4 +1,4 @@
-// frontend/src/pages/trades.tsx
+// frontend/src/pages/Trades.tsx
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
@@ -20,11 +20,13 @@ import { useToast } from "@/hooks/use-toast";
 // ✅ Import Contexts
 import { useModal } from "@/contexts/ModalContext";
 import { useAuth } from "@/contexts/AuthContext";
+import { useCurrency } from "@/contexts/CurrencyContext"; // ✅ Added Currency Context
 
 export const Trades = () => {
   const navigate = useNavigate();
   const { toast } = useToast();
   const { openUpgradeModal } = useModal();
+  const { format } = useCurrency(); // ✅ Use format function
   
   // ✅ USE GLOBAL PLAN
   const { plan } = useAuth();
@@ -355,7 +357,8 @@ export const Trades = () => {
                           </TableCell>
                           <TableCell>
                             <div className={`font-semibold ${trade.pl > 0 ? "text-success" : "text-destructive"}`}>
-                              {trade.pl > 0 ? "+" : ""}${Math.abs(trade.pl).toFixed(2)}
+                              {/* ✅ UPDATED: Use format() for automatic conversion & currency symbol */}
+                              {trade.pl > 0 ? "+" : "-"}{format(Math.abs(trade.pl))}
                             </div>
                           </TableCell>
                           <TableCell>

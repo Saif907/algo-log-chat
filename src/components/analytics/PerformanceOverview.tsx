@@ -1,6 +1,8 @@
+// frontend/src/components/analytics/PerformanceOverview.tsx
 import { Card } from "@/components/ui/card";
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, ResponsiveContainer, Tooltip } from "recharts";
 import { ArrowUpRight, ArrowDownRight, TrendingUp, Target, Award, AlertTriangle } from "lucide-react";
+import { useCurrency } from "@/contexts/CurrencyContext"; // ✅ Import Context
 
 interface Props {
   equityData: any[];
@@ -8,12 +10,19 @@ interface Props {
 }
 
 export const PerformanceOverview = ({ equityData, stats }: Props) => {
+  const { format, convert, currency } = useCurrency(); // ✅ Use Hook
   const isPositive = stats.netPL >= 0;
+
+  // ✅ Convert Chart Data
+  const convertedEquity = equityData.map(d => ({
+    ...d,
+    value: convert(d.value)
+  }));
 
   const keyMetrics = [
     { label: "Win Rate", value: `${stats.winRate}%`, icon: TrendingUp, good: stats.winRate > 50 },
     { label: "Profit Factor", value: `${stats.profitFactor}`, icon: Target, good: Number(stats.profitFactor) > 1.5 },
-    { label: "Max Drawdown", value: `$${Math.abs(stats.maxDrawdown).toLocaleString()}`, icon: AlertTriangle, good: false },
+    { label: "Max Drawdown", value: format(Math.abs(stats.maxDrawdown)), icon: AlertTriangle, good: false },
     { label: "Recovery Factor", value: stats.recoveryFactor, icon: Award, good: Number(stats.recoveryFactor) > 2 },
   ];
 
@@ -21,9 +30,12 @@ export const PerformanceOverview = ({ equityData, stats }: Props) => {
     <div className="space-y-4 sm:space-y-6">
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
         <Card className="p-4 sm:p-6">
-          <p className="text-[10px] sm:text-sm text-muted-foreground mb-0.5 sm:mb-1">TOTAL P&L</p>
+          <p className="text-[10px] sm:text-sm text-muted-foreground mb-0.5 sm:mb-1">
+            TOTAL P&L ({currency})
+          </p>
           <p className={`text-xl sm:text-3xl font-bold ${isPositive ? "text-success" : "text-destructive"}`}>
-            ${stats.netPL.toLocaleString()}
+            {/* ✅ Use format() */}
+            {format(stats.netPL)}
           </p>
           <div className="flex items-center gap-1 mt-1 sm:mt-2">
             {isPositive ? <ArrowUpRight className="h-3 w-3 text-success" /> : <ArrowDownRight className="h-3 w-3 text-destructive" />}
@@ -52,13 +64,16 @@ export const PerformanceOverview = ({ equityData, stats }: Props) => {
           <p className="text-xl sm:text-3xl font-bold">{stats.profitFactor}</p>
            <div className="mt-2 sm:mt-3 space-y-1">
             <div className="h-1 sm:h-1.5 bg-success rounded-full" style={{ width: "100%" }} />
-            <div className="h-1 sm:h-1.5 bg-destructive rounded-full" style={{ width: `${Math.min((1/Number(stats.profitFactor))*100, 100)}%` }} />
+            <div className="h-1 sm:h-1.5 bg-destructive rounded-full" style={{ width: `${Math.min((1/Number(stats.profitFactor || 1))*100, 100)}%` }} />
           </div>
         </Card>
 
         <Card className="p-4 sm:p-6">
           <p className="text-[10px] sm:text-sm text-muted-foreground mb-0.5 sm:mb-1">AVG WIN</p>
-          <p className="text-xl sm:text-3xl font-bold text-success">${Math.round(stats.avgWin).toLocaleString()}</p>
+          <p className="text-xl sm:text-3xl font-bold text-success">
+             {/* ✅ Use format() */}
+            {format(stats.avgWin)}
+          </p>
         </Card>
       </div>
 
@@ -67,7 +82,7 @@ export const PerformanceOverview = ({ equityData, stats }: Props) => {
           <h3 className="text-xs sm:text-sm font-semibold">EQUITY CURVE</h3>
         </div>
         <ResponsiveContainer width="100%" height={220} className="sm:h-[300px]">
-          <AreaChart data={equityData}>
+          <AreaChart data={convertedEquity}>
             <defs>
               <linearGradient id="equityGradient" x1="0" y1="0" x2="0" y2="1">
                 <stop offset="5%" stopColor="hsl(var(--primary))" stopOpacity={0.3} />
@@ -78,7 +93,6 @@ export const PerformanceOverview = ({ equityData, stats }: Props) => {
             <XAxis dataKey="date" stroke="hsl(var(--muted-foreground))" tick={{ fontSize: 10 }} />
             <YAxis stroke="hsl(var(--muted-foreground))" tick={{ fontSize: 10 }} />
             
-            {/* ✅ FIXED: Tooltip Colors */}
             <Tooltip 
               contentStyle={{ 
                 backgroundColor: "hsl(var(--popover))", 
@@ -86,6 +100,8 @@ export const PerformanceOverview = ({ equityData, stats }: Props) => {
                 color: "hsl(var(--popover-foreground))"
               }} 
               itemStyle={{ color: 'hsl(var(--popover-foreground))' }}
+              // ✅ Formatter for tooltip
+              formatter={(val: number) => format(val)}
             />
             
             <Area type="monotone" dataKey="value" stroke="hsl(var(--primary))" fill="url(#equityGradient)" strokeWidth={2} />
@@ -121,10 +137,10 @@ export const PerformanceOverview = ({ equityData, stats }: Props) => {
             {[
               { label: "Total Trades", value: stats.tradeCount },
               { label: "Win Rate", value: `${stats.winRate}%`, color: stats.winRate > 50 ? "text-success" : "text-destructive" },
-              { label: "Avg Trade", value: `$${((stats.avgWin + stats.avgLoss)/2).toFixed(0)}` },
-              { label: "Largest Win", value: `$${stats.largestWin.toLocaleString()}`, color: "text-success" },
-              { label: "Largest Loss", value: `$${stats.largestLoss.toLocaleString()}`, color: "text-destructive" },
-              { label: "Avg Loss", value: `$${Math.abs(stats.avgLoss).toFixed(0)}`, color: "text-destructive" },
+              { label: "Avg Trade", value: format((stats.avgWin + stats.avgLoss)/2) },
+              { label: "Largest Win", value: format(stats.largestWin), color: "text-success" },
+              { label: "Largest Loss", value: format(stats.largestLoss), color: "text-destructive" },
+              { label: "Avg Loss", value: format(Math.abs(stats.avgLoss)), color: "text-destructive" },
             ].map((stat) => (
               <div key={stat.label} className="text-center p-3 bg-muted/20 rounded-lg">
                 <p className="text-[10px] sm:text-xs text-muted-foreground mb-1">{stat.label}</p>
