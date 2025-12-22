@@ -21,19 +21,19 @@ const Terms = () => {
         <Card>
           <CardHeader>
             <CardTitle className="text-3xl">Terms & Conditions</CardTitle>
-            <p className="text-sm text-muted-foreground">Last Updated: {new Date().toLocaleDateString()}</p>
+            <p className="text-sm text-muted-foreground">Last Updated: December 22, 2025</p>
           </CardHeader>
           <CardContent className="prose prose-sm max-w-none dark:prose-invert">
             <section className="space-y-4">
               <h2 className="text-xl font-semibold">1. Acceptance of Terms</h2>
               <p>
-                Welcome to our AI-powered Trading Journal platform ("Service," "we," "us," or "our"). By accessing 
+                Welcome to TradeOmen ("Service," "we," "us," or "our"). By accessing 
                 or using our web-based trading journal service, you agree to be bound by these Terms & Conditions 
                 ("Terms"). If you do not agree to all the terms, you may not access or use the Service.
               </p>
               <p>
                 These Terms constitute a legally binding agreement between you ("User," "you," or "your") and 
-                our company. Please read them carefully.
+                TradeOmen. Please read them carefully.
               </p>
             </section>
 
@@ -63,7 +63,6 @@ const Terms = () => {
                 <li>You must provide accurate and complete registration information</li>
                 <li>You must have the legal capacity to enter into binding contracts</li>
                 <li>You must not be prohibited from using the Service under applicable laws</li>
-                <li>Corporate accounts must be authorized by an appropriate representative</li>
               </ul>
             </section>
 
@@ -110,8 +109,8 @@ const Terms = () => {
               <ul className="list-disc pl-6 space-y-2">
                 <li>Payments are processed through Stripe, Razorpay, or UPI based on region</li>
                 <li>You authorize us to charge your payment method for subscription fees</li>
-                <li>All fees are non-refundable except as required by law or our Refund Policy</li>
-                <li>Applicable taxes (GST, VAT, sales tax) will be added to subscription costs</li>
+                <li>All fees are non-refundable except as required by law</li>
+                <li>For billing inquiries, contact: <strong>billing@tradeomen.com</strong></li>
               </ul>
 
               <h3 className="text-lg font-semibold mt-4">5.3 Automatic Renewal</h3>
@@ -120,13 +119,6 @@ const Terms = () => {
                 <li>You will be charged automatically unless you cancel before renewal</li>
                 <li>Email reminders are sent 7 days before renewal</li>
                 <li>Cancel anytime through account settings to prevent future charges</li>
-              </ul>
-
-              <h3 className="text-lg font-semibold mt-4">5.4 Failed Payments</h3>
-              <ul className="list-disc pl-6 space-y-2">
-                <li>We will retry failed payments up to 3 times over 7 days</li>
-                <li>Accounts with failed payments may be downgraded or suspended</li>
-                <li>Update payment information promptly to avoid service interruption</li>
               </ul>
             </section>
 
@@ -143,12 +135,7 @@ const Terms = () => {
                 <li>Trading involves substantial risk of loss and is not suitable for everyone</li>
                 <li>You are solely responsible for your own trading decisions and outcomes</li>
                 <li>Consult with licensed financial advisors before making investment decisions</li>
-                <li>We are NOT registered as investment advisors or financial planners</li>
               </ul>
-              <p className="mt-4 font-semibold text-foreground">
-                By using this Service, you acknowledge that you trade at your own risk and will not hold us liable 
-                for any trading losses.
-              </p>
             </section>
 
             <section className="space-y-4 mt-6">
@@ -169,14 +156,12 @@ const Terms = () => {
 
             <section className="space-y-4 mt-6">
               <h2 className="text-xl font-semibold">8. Intellectual Property</h2>
-              
               <h3 className="text-lg font-semibold mt-4">8.1 Our Rights</h3>
               <ul className="list-disc pl-6 space-y-2">
                 <li>The Service, including code, design, logos, and AI models, is our proprietary property</li>
                 <li>All trademarks, service marks, and branding belong to us</li>
                 <li>You may not copy, reproduce, distribute, or create derivative works without permission</li>
               </ul>
-
               <h3 className="text-lg font-semibold mt-4">8.2 Your Content</h3>
               <ul className="list-disc pl-6 space-y-2">
                 <li>You retain ownership of your trade data, notes, screenshots, and uploaded content</li>
@@ -208,10 +193,6 @@ const Terms = () => {
                 <li>We are NOT liable for third-party integrations, broker API failures, or external services</li>
                 <li>Our maximum liability is limited to the amount you paid in subscription fees in the last 12 months</li>
               </ul>
-              <p className="mt-4">
-                Some jurisdictions do not allow liability limitations. In such cases, our liability is limited to the 
-                fullest extent permitted by law.
-              </p>
             </section>
 
             <section className="space-y-4 mt-6">
@@ -234,7 +215,7 @@ const Terms = () => {
               <p>
                 We reserve the right to modify these Terms at any time. Material changes will be communicated via 
                 email or in-platform notification. Continued use of the Service after changes constitutes acceptance 
-                of the revised Terms. If you do not agree, you must discontinue use and cancel your account.
+                of the revised Terms.
               </p>
             </section>
 
@@ -254,13 +235,13 @@ const Terms = () => {
               <h3 className="text-lg font-semibold mt-4">14.1 Governing Law</h3>
               <p>
                 These Terms are governed by the laws of India. Any disputes shall be subject to the exclusive 
-                jurisdiction of courts in [Your City], India.
+                jurisdiction of courts in Chhatrapati Sambhajinagar, Maharashtra, India.
               </p>
 
               <h3 className="text-lg font-semibold mt-4">14.2 Arbitration</h3>
               <p>
                 Any disputes arising from these Terms shall be resolved through binding arbitration in accordance with 
-                Indian arbitration laws, rather than in court. Each party shall bear their own costs.
+                Indian arbitration laws.
               </p>
 
               <h3 className="text-lg font-semibold mt-4">14.3 Class Action Waiver</h3>
@@ -281,14 +262,15 @@ const Terms = () => {
               <h2 className="text-xl font-semibold">16. Contact Information</h2>
               <p>For questions about these Terms, contact us at:</p>
               <ul className="list-disc pl-6 space-y-2">
-                <li><strong>Email:</strong> legal@yourtradingjournal.com</li>
-                <li><strong>Support:</strong> support@yourtradingjournal.com</li>
+                <li><strong>Legal:</strong> saifshaikh@tradeomen.com</li>
+                <li><strong>Support:</strong> support@tradeomen.com</li>
+                <li><strong>Billing:</strong> billing@tradeomen.com</li>
               </ul>
             </section>
 
             <section className="space-y-4 mt-6">
               <p className="text-sm text-muted-foreground italic">
-                By using our Trading Journal platform, you acknowledge that you have read, understood, and agree 
+                By using TradeOmen, you acknowledge that you have read, understood, and agree 
                 to be bound by these Terms & Conditions.
               </p>
             </section>
